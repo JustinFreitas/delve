@@ -48,6 +48,10 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
   (THAC0 vs descending AC, nat-20/nat-1), `CombatTables` (class & monster THAC0 progressions),
   full per-level `SavingThrows`, `Advancement` (per-class XP tables), `DamageRoll`, and the
   `Monster`/`MonsterType` model with a starter `Bestiary`.
+- **Milestone 4** — procedural exploration: `DungeonGenerator` (multi-level connected room graphs,
+  Moldvay-style stocking, depth-appropriate monsters, secret doors, stairs) and `ExplorationService`
+  (the state machine for `/enter` `/look` `/move` `/search` `/open`), with 10-minute dungeon turns,
+  torch burn, wandering-monster checks, and trap springing.
 
 See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full milestone roadmap.
 
@@ -59,5 +63,10 @@ See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full mile
 | `/help` `[command]` | List commands, or detailed help for one. |
 | `/roll-character <class> [name]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling). |
 | `/sheet` | Show your current character sheet. |
+| `/enter` | Begin a dungeon delve. |
+| `/look` | Describe the current room (free). |
+| `/move <dir>` | Move north/south/east/west, or up/down at stairs (one dungeon turn). |
+| `/search` | Search for secret doors, traps and treasure (one dungeon turn). |
+| `/open <dir>` | Open or force a door. |
 
 Commands also work via the message prefix (default `!`) or by mentioning the bot.

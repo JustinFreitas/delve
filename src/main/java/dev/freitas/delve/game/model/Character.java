@@ -31,6 +31,9 @@ public class Character {
 
     private int gold;
 
+    /** Torches carried for lighting the way; consumed as they burn out underground. */
+    private int torches = 6;
+
     private List<String> inventory = new ArrayList<>();
     private List<String> spellbook = new ArrayList<>();
 
@@ -157,6 +160,14 @@ public class Character {
 
     public void setGold(int gold) {
         this.gold = gold;
+    }
+
+    public int getTorches() {
+        return torches;
+    }
+
+    public void setTorches(int torches) {
+        this.torches = torches;
     }
 
     public List<String> getInventory() {

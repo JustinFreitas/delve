@@ -8,6 +8,7 @@ package dev.freitas.delve.game.model;
 public class SaveGame {
 
     private Character character;
+    private GameSession session = new GameSession();
 
     public SaveGame() {}
 
@@ -21,5 +22,13 @@ public class SaveGame {
 
     public void setCharacter(Character character) {
         this.character = character;
+    }
+
+    public GameSession getSession() {
+        return session;
+    }
+
+    public void setSession(GameSession session) {
+        this.session = session;
     }
 }
