@@ -44,6 +44,10 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
 - **Milestone 2** — character creation & sheet with full B/X mechanics (abilities + modifiers, the
   seven classes with requirements, HP from hit dice, AC, saving throws, starting gold/gear/spells),
   persisted per Discord user as a JSON save blob.
+- **Milestone 3** — deterministic combat engine (no Discord), unit-tested: `AttackResolver`
+  (THAC0 vs descending AC, nat-20/nat-1), `CombatTables` (class & monster THAC0 progressions),
+  full per-level `SavingThrows`, `Advancement` (per-class XP tables), `DamageRoll`, and the
+  `Monster`/`MonsterType` model with a starter `Bestiary`.
 
 See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full milestone roadmap.
 

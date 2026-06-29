@@ -5,6 +5,7 @@ import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
+import dev.freitas.delve.game.engine.CombatTables;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,9 +46,27 @@ public class Character {
         return 19 - armorClass();
     }
 
-    /** To-hit-AC-0 number. Level 1 is 19 for all B/X classes; progression arrives in Milestone 5. */
+    /** To-hit-AC-0 number, from the B/X "attacks as" progression for this class and level. */
     public int thac0() {
-        return 19;
+        return CombatTables.classThac0(characterClass, level);
+    }
+
+    /** Melee to-hit modifier: STR modifier (added to the d20 attack roll in B/X). */
+    @JsonIgnore
+    public int meleeToHitModifier() {
+        return abilities.modifier(Ability.STR);
+    }
+
+    /** Missile to-hit modifier: DEX modifier. */
+    @JsonIgnore
+    public int missileToHitModifier() {
+        return abilities.modifier(Ability.DEX);
+    }
+
+    /** Melee damage modifier: STR modifier (no ability bonus to missile damage in B/X). */
+    @JsonIgnore
+    public int meleeDamageModifier() {
+        return abilities.modifier(Ability.STR);
     }
 
     /** XP needed to reach the next level (only level 2 is known until Milestone 7). */
