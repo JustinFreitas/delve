@@ -4,6 +4,7 @@ import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
+import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.model.Character;
 import java.util.ArrayList;
@@ -72,39 +73,46 @@ public class CharacterFactory {
             case FIGHTER, DWARF -> {
                 c.setArmor(Armor.CHAIN_MAIL);
                 c.setShield(true);
-                gear.add(characterClass == CharacterClass.DWARF ? "Battle axe" : "Sword");
+                String weapon = characterClass == CharacterClass.DWARF ? "Battle axe" : "Sword";
+                setWeapon(c, weapon, new DamageRoll(1, 8));
+                gear.add(weapon);
                 gear.add("Dagger");
             }
             case CLERIC -> {
                 c.setArmor(Armor.CHAIN_MAIL);
                 c.setShield(true);
-                gear.add("Mace"); // clerics use blunt weapons only
+                setWeapon(c, "Mace", new DamageRoll(1, 6)); // clerics use blunt weapons only
+                gear.add("Mace");
                 gear.add("Holy symbol (wooden)");
             }
             case MAGIC_USER -> {
                 c.setArmor(Armor.NONE);
+                setWeapon(c, "Dagger", new DamageRoll(1, 4));
                 gear.add("Dagger");
                 gear.add("Spellbook");
             }
             case THIEF -> {
                 c.setArmor(Armor.LEATHER);
+                setWeapon(c, "Sword", new DamageRoll(1, 8));
                 gear.add("Sword");
                 gear.add("Dagger");
                 gear.add("Thieves' tools");
             }
             case ELF -> {
                 c.setArmor(Armor.CHAIN_MAIL);
+                setWeapon(c, "Sword", new DamageRoll(1, 8));
                 gear.add("Sword");
                 gear.add("Short bow & 20 arrows");
                 gear.add("Spellbook");
             }
             case HALFLING -> {
                 c.setArmor(Armor.LEATHER);
-                gear.add("Sword");
+                setWeapon(c, "Short sword", new DamageRoll(1, 6));
+                gear.add("Short sword");
                 gear.add("Sling & 30 stones");
             }
         }
-        // Common kit every delver carries.
+        // Common kit every delver carries (see Character.torches for the light supply).
         gear.add("Backpack");
         gear.add("6 Torches");
         gear.add("Tinderbox");
@@ -112,5 +120,10 @@ public class CharacterFactory {
         gear.add("Waterskin");
         gear.add("50' rope");
         c.setInventory(gear);
+    }
+
+    private void setWeapon(Character c, String name, DamageRoll damage) {
+        c.setMainWeapon(name);
+        c.setMainWeaponDamage(damage);
     }
 }

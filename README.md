@@ -52,6 +52,9 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
   Moldvay-style stocking, depth-appropriate monsters, secret doors, stairs) and `ExplorationService`
   (the state machine for `/enter` `/look` `/move` `/search` `/open`), with 10-minute dungeon turns,
   torch burn, wandering-monster checks, and trap springing.
+- **Milestone 5** — combat loop: `CombatService` runs B/X side-initiative rounds (`/attack`, `/flee`),
+  monster retaliation, morale checks, and 2d6 reaction rolls on encounter; victory awards XP and
+  auto-levels the character (HP gain), defeat ends the delve.
 
 See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full milestone roadmap.
 
@@ -68,5 +71,7 @@ See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full mile
 | `/move <dir>` | Move north/south/east/west, or up/down at stairs (one dungeon turn). |
 | `/search` | Search for secret doors, traps and treasure (one dungeon turn). |
 | `/open <dir>` | Open or force a door. |
+| `/attack [n]` | Strike in combat (one round); optionally target enemy #n. |
+| `/flee` | Flee combat to an adjacent room. |
 
 Commands also work via the message prefix (default `!`) or by mentioning the bot.

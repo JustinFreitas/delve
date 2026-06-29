@@ -20,6 +20,9 @@ public class GameSession {
     private int torchTurnsRemaining;
     private boolean inDarkness;
 
+    /** The active fight, when {@link #state} is {@link SessionState#IN_COMBAT}. */
+    private CombatEncounter combat;
+
     public GameSession() {}
 
     @JsonIgnore
@@ -91,5 +94,13 @@ public class GameSession {
 
     public void setInDarkness(boolean inDarkness) {
         this.inDarkness = inDarkness;
+    }
+
+    public CombatEncounter getCombat() {
+        return combat;
+    }
+
+    public void setCombat(CombatEncounter combat) {
+        this.combat = combat;
     }
 }

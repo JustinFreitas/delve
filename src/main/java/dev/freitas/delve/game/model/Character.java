@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.CombatTables;
+import dev.freitas.delve.game.engine.DamageRoll;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,6 +29,9 @@ public class Character {
 
     private Armor armor = Armor.NONE;
     private boolean shield;
+
+    private String mainWeapon = "Weapon";
+    private DamageRoll mainWeaponDamage = new DamageRoll(1, 6);
 
     private int gold;
 
@@ -70,6 +74,22 @@ public class Character {
     @JsonIgnore
     public int meleeDamageModifier() {
         return abilities.modifier(Ability.STR);
+    }
+
+    public String getMainWeapon() {
+        return mainWeapon;
+    }
+
+    public void setMainWeapon(String mainWeapon) {
+        this.mainWeapon = mainWeapon;
+    }
+
+    public DamageRoll getMainWeaponDamage() {
+        return mainWeaponDamage == null ? new DamageRoll(1, 6) : mainWeaponDamage;
+    }
+
+    public void setMainWeaponDamage(DamageRoll mainWeaponDamage) {
+        this.mainWeaponDamage = mainWeaponDamage;
     }
 
     /** XP needed to reach the next level (only level 2 is known until Milestone 7). */

@@ -36,10 +36,12 @@ public class ExplorationService {
 
     private final Dice dice;
     private final DungeonGenerator generator;
+    private final CombatService combat;
 
-    public ExplorationService(Dice dice, DungeonGenerator generator) {
+    public ExplorationService(Dice dice, DungeonGenerator generator, CombatService combat) {
         this.dice = dice;
         this.generator = generator;
+        this.combat = combat;
     }
 
     /** Begins a fresh dungeon run for the character, lighting the first torch. */
@@ -78,6 +80,9 @@ public class ExplorationService {
     /** Moves through a cardinal exit, advancing one dungeon turn. */
     public ExplorationResult move(SaveGame save, Direction direction) {
         GameSession session = save.getSession();
+        if (session.getState() == SessionState.IN_COMBAT) {
+            return ExplorationResult.failure("You are locked in combat — `attack` or `flee` first.");
+        }
         Room room = session.currentRoom();
         Exit exit = room.getExits().get(direction);
 
@@ -90,9 +95,7 @@ public class ExplorationService {
         }
 
         session.setCurrentRoomId(exit.getDestinationRoomId());
-        Room arrived = session.currentRoom();
-        boolean firstVisit = !arrived.isVisited();
-        arrived.setVisited(true);
+        session.currentRoom().setVisited(true);
 
         ExplorationResult result = new ExplorationResult();
         result.add("You go " + direction.lower() + ".");
@@ -100,10 +103,7 @@ public class ExplorationService {
         maybeSpringTrap(save, result);
         result.add("");
         result.add(describeRoom(session));
-        if (firstVisit && arrived.hasLiveMonster()) {
-            result.add("");
-            result.add("_Combat is coming in the next update — for now you may move away._");
-        }
+        handleEncounter(save, result);
         return result;
     }
 
@@ -125,6 +125,7 @@ public class ExplorationService {
         advanceTurn(save, result);
         result.add("");
         result.add(describeRoom(session));
+        handleEncounter(save, result);
         return result;
     }
 
@@ -173,6 +174,7 @@ public class ExplorationService {
         }
         room.setSearched(true);
         advanceTurn(save, result);
+        handleEncounter(save, result);
         return result;
     }
 
@@ -287,6 +289,26 @@ public class ExplorationService {
                 session.setState(SessionState.IN_TOWN);
                 result.add("**" + character.getName() + " has died in the dungeon.**");
             }
+        }
+    }
+
+    /** When a live monster shares the room, rolls reaction and starts combat if it is hostile. */
+    private void handleEncounter(SaveGame save, ExplorationResult result) {
+        GameSession session = save.getSession();
+        if (session.getState() == SessionState.IN_COMBAT) {
+            return;
+        }
+        Room room = session.currentRoom();
+        if (!room.hasLiveMonster()) {
+            return;
+        }
+        MonsterType type = Bestiary.byName(room.getMonsterName());
+        result.add("");
+        if (combat.isHostileReaction(save.getCharacter(), type)) {
+            result.getLines().addAll(combat.startCombat(save).getLines());
+        } else {
+            String plural = room.getMonsterName().toLowerCase() + (room.getMonsterCount() > 1 ? "s" : "");
+            result.add("The " + plural + " watch you warily but do not attack yet. (`attack` to fight, or move on.)");
         }
     }
 
