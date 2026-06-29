@@ -9,21 +9,17 @@ import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.CombatTables;
 import dev.freitas.delve.game.engine.DamageRoll;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * A player character. Mutable POJO serialized to/from the save blob via Jackson, so it carries a
- * no-arg constructor and plain getters/setters. Derived combat values (effective AC, THAC0) are
- * computed from the stored state rather than persisted, so they stay correct as gear/level change.
+ * A hired retainer (henchman) who adventures and fights alongside the player. Shares the combat and
+ * advancement contracts with {@link Character} but adds loyalty and a "fled" flag for desertion.
  */
-public class Character implements Combatant, Advanceable {
+public class Retainer implements Combatant, Advanceable {
 
     private String name;
     private CharacterClass characterClass;
     private int level = 1;
     private int xp = 0;
-
     private AbilityScores abilities = new AbilityScores();
 
     private int maxHp;
@@ -31,77 +27,40 @@ public class Character implements Combatant, Advanceable {
 
     private Armor armor = Armor.NONE;
     private boolean shield;
-
     private String mainWeapon = "Weapon";
     private DamageRoll mainWeaponDamage = new DamageRoll(1, 6);
 
-    private int gold;
+    private int loyalty = 7;
+    private boolean fled;
 
-    /** Torches carried for lighting the way; consumed as they burn out underground. */
-    private int torches = 6;
+    public Retainer() {}
 
-    private List<String> inventory = new ArrayList<>();
-    private List<String> spellbook = new ArrayList<>();
-
-    public Character() {}
-
-    /** Effective descending Armor Class: armor base, improved by a shield and by the DEX modifier. */
+    @Override
     public int armorClass() {
         return armor.baseArmorClass() - (shield ? 1 : 0) - abilities.modifier(Ability.DEX);
     }
 
-    /** Ascending AC equivalent (AC asc = 19 - AC desc), shown on the sheet for readability. */
-    public int ascendingArmorClass() {
-        return 19 - armorClass();
-    }
-
-    /** To-hit-AC-0 number, from the B/X "attacks as" progression for this class and level. */
+    @Override
     public int thac0() {
         return CombatTables.classThac0(characterClass, level);
     }
 
-    /** Melee to-hit modifier: STR modifier (added to the d20 attack roll in B/X). */
+    @Override
     @JsonIgnore
     public int meleeToHitModifier() {
         return abilities.modifier(Ability.STR);
     }
 
-    /** Missile to-hit modifier: DEX modifier. */
-    @JsonIgnore
-    public int missileToHitModifier() {
-        return abilities.modifier(Ability.DEX);
-    }
-
-    /** Melee damage modifier: STR modifier (no ability bonus to missile damage in B/X). */
+    @Override
     @JsonIgnore
     public int meleeDamageModifier() {
         return abilities.modifier(Ability.STR);
     }
 
-    public String getMainWeapon() {
-        return mainWeapon;
-    }
-
-    public void setMainWeapon(String mainWeapon) {
-        this.mainWeapon = mainWeapon;
-    }
-
-    public DamageRoll getMainWeaponDamage() {
-        return mainWeaponDamage == null ? new DamageRoll(1, 6) : mainWeaponDamage;
-    }
-
-    public void setMainWeaponDamage(DamageRoll mainWeaponDamage) {
-        this.mainWeaponDamage = mainWeaponDamage;
-    }
-
-    /** XP needed to reach the next level (only level 2 is known until Milestone 7). */
-    public int xpForNextLevel() {
-        return characterClass.xpForLevel2();
-    }
-
+    @Override
     @JsonIgnore
     public boolean isAlive() {
-        return currentHp > 0;
+        return currentHp > 0 && !fled;
     }
 
     public String getName() {
@@ -176,35 +135,35 @@ public class Character implements Combatant, Advanceable {
         this.shield = shield;
     }
 
-    public int getGold() {
-        return gold;
+    public String getMainWeapon() {
+        return mainWeapon;
     }
 
-    public void setGold(int gold) {
-        this.gold = gold;
+    public void setMainWeapon(String mainWeapon) {
+        this.mainWeapon = mainWeapon;
     }
 
-    public int getTorches() {
-        return torches;
+    public DamageRoll getMainWeaponDamage() {
+        return mainWeaponDamage == null ? new DamageRoll(1, 6) : mainWeaponDamage;
     }
 
-    public void setTorches(int torches) {
-        this.torches = torches;
+    public void setMainWeaponDamage(DamageRoll mainWeaponDamage) {
+        this.mainWeaponDamage = mainWeaponDamage;
     }
 
-    public List<String> getInventory() {
-        return inventory;
+    public int getLoyalty() {
+        return loyalty;
     }
 
-    public void setInventory(List<String> inventory) {
-        this.inventory = inventory;
+    public void setLoyalty(int loyalty) {
+        this.loyalty = loyalty;
     }
 
-    public List<String> getSpellbook() {
-        return spellbook;
+    public boolean isFled() {
+        return fled;
     }
 
-    public void setSpellbook(List<String> spellbook) {
-        this.spellbook = spellbook;
+    public void setFled(boolean fled) {
+        this.fled = fled;
     }
 }

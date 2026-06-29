@@ -3,6 +3,7 @@ package dev.freitas.delve.game.session;
 import dev.freitas.delve.game.Bestiary;
 import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.AttackResolver;
+import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Leveling;
 import dev.freitas.delve.game.model.Character;
@@ -11,6 +12,7 @@ import dev.freitas.delve.game.model.Exit;
 import dev.freitas.delve.game.model.GameSession;
 import dev.freitas.delve.game.model.Monster;
 import dev.freitas.delve.game.model.MonsterType;
+import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
@@ -19,9 +21,10 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
- * The B/X combat loop. Each call to {@link #attackRound} resolves one full round: side initiative
- * (1d6 per side), the player's attack and the monsters' attacks in initiative order, then a morale
- * check. Victory awards XP (and may level the character up); defeat ends the delve.
+ * The B/X combat loop for the whole party (player character + retainers). Each call to
+ * {@link #attackRound} resolves one round: side initiative (1d6 per side), the party's attacks and
+ * the monsters' attacks (spread across random party members), then loyalty and morale checks.
+ * Victory splits XP into shares (retainers take half-shares); the delve ends only if the player dies.
  */
 @Service
 public class CombatService {
@@ -66,11 +69,9 @@ public class CombatService {
     /** Resolves one round of combat; starts the fight first if the player initiated it. */
     public ExplorationResult attackRound(SaveGame save, Integer targetIndex) {
         GameSession session = save.getSession();
-
         if (session.getState() != SessionState.IN_COMBAT) {
             if (session.currentRoom().hasLiveMonster()) {
-                ExplorationResult intro = startCombat(save);
-                return continueRound(save, targetIndex, intro);
+                return continueRound(save, targetIndex, startCombat(save));
             }
             return ExplorationResult.failure("There is nothing here to attack.");
         }
@@ -78,76 +79,106 @@ public class CombatService {
     }
 
     private ExplorationResult continueRound(SaveGame save, Integer targetIndex, ExplorationResult result) {
-        GameSession session = save.getSession();
         Character character = save.getCharacter();
-        CombatEncounter encounter = session.getCombat();
+        CombatEncounter encounter = save.getSession().getCombat();
         encounter.setRound(encounter.getRound() + 1);
         result.add("__Round " + encounter.getRound() + "__");
 
         boolean playerFirst = dice.d(6) >= dice.d(6); // side initiative, ties to the player
         if (playerFirst) {
-            playerAttack(character, encounter, targetIndex, result);
+            partyAttacks(save, targetIndex, result);
             if (!encounter.isOver()) {
-                monstersAttack(save, result);
+                monstersAttackParty(save, result);
             }
         } else {
-            monstersAttack(save, result);
+            monstersAttackParty(save, result);
             if (character.isAlive() && !encounter.aliveMonsters().isEmpty()) {
-                playerAttack(character, encounter, targetIndex, result);
+                partyAttacks(save, targetIndex, result);
             }
         }
 
         if (!character.isAlive()) {
             return defeat(save, result);
         }
+        loyaltyChecks(save, result);
         checkMorale(encounter, result);
         if (encounter.isOver()) {
             return victory(save, result);
         }
         result.add("");
-        result.add(status(character, encounter));
+        result.add(status(save));
         return result;
     }
 
-    private void playerAttack(
-            Character character, CombatEncounter encounter, Integer targetIndex, ExplorationResult result) {
+    private void partyAttacks(SaveGame save, Integer targetIndex, ExplorationResult result) {
+        Character character = save.getCharacter();
+        CombatEncounter encounter = save.getSession().getCombat();
+        attack(character, "your " + character.getMainWeapon().toLowerCase(), encounter, targetIndex, result);
+        for (Retainer retainer : save.livingRetainers()) {
+            if (!encounter.aliveMonsters().isEmpty()) {
+                attack(retainer, retainer.getMainWeapon().toLowerCase(), encounter, null, result);
+            }
+        }
+    }
+
+    private void attack(
+            Combatant attacker, String weapon, CombatEncounter encounter, Integer targetIndex, ExplorationResult result) {
         List<Monster> alive = encounter.aliveMonsters();
         if (alive.isEmpty()) {
             return;
         }
         int index = (targetIndex != null && targetIndex >= 1 && targetIndex <= alive.size()) ? targetIndex - 1 : 0;
         Monster target = alive.get(index);
+        boolean isPlayer = attacker instanceof Character;
+        String who = isPlayer ? "You" : attacker.getName();
+        String name = target.getType().name().toLowerCase();
 
         var outcome = AttackResolver.resolve(
-                dice.d20(), character.meleeToHitModifier(), character.thac0(), target.getType().armorClass());
-        String name = target.getType().name().toLowerCase();
+                dice.d20(), attacker.meleeToHitModifier(), attacker.thac0(), target.getType().armorClass());
         if (outcome.hit()) {
-            int damage = Math.max(1, character.getMainWeaponDamage().roll(dice) + character.meleeDamageModifier());
+            int damage = Math.max(1, attacker.getMainWeaponDamage().roll(dice) + attacker.meleeDamageModifier());
             target.takeDamage(damage);
-            result.add("You strike the " + name + " with your " + character.getMainWeapon().toLowerCase()
+            result.add(who + " " + (isPlayer ? "strike" : "strikes") + " the " + name + " with " + weapon
                     + " for " + damage + " damage" + (outcome.critical() ? " (critical!)" : "")
                     + (target.isAlive() ? " (" + target.getCurrentHp() + " hp left)." : " — it falls!"));
         } else {
-            result.add("You swing at the " + name + " and miss" + (outcome.fumble() ? " badly" : "") + ".");
+            result.add(who + " " + (isPlayer ? "swing" : "swings") + " at the " + name + " and "
+                    + (isPlayer ? "miss" : "misses") + (outcome.fumble() ? " badly" : "") + ".");
         }
     }
 
-    private void monstersAttack(SaveGame save, ExplorationResult result) {
+    private void monstersAttackParty(SaveGame save, ExplorationResult result) {
         Character character = save.getCharacter();
         CombatEncounter encounter = save.getSession().getCombat();
         for (Monster monster : encounter.aliveMonsters()) {
+            List<Combatant> party = livingParty(save);
+            if (party.isEmpty()) {
+                return;
+            }
+            Combatant target = party.get(dice.d(party.size()) - 1);
             MonsterType type = monster.getType();
-            var outcome = AttackResolver.resolve(dice.d20(), 0, type.thac0(), character.armorClass());
+            var outcome = AttackResolver.resolve(dice.d20(), 0, type.thac0(), target.armorClass());
+            String victim = (target instanceof Character) ? "you" : target.getName();
             if (outcome.hit()) {
                 int damage = type.attack().roll(dice);
-                character.setCurrentHp(character.getCurrentHp() - damage);
-                result.add("The " + type.name().toLowerCase() + " hits you for " + damage + " damage"
-                        + (character.isAlive() ? " (" + Math.max(0, character.getCurrentHp()) + " hp left)." : "."));
-                if (!character.isAlive()) {
+                target.setCurrentHp(target.getCurrentHp() - damage);
+                result.add("The " + type.name().toLowerCase() + " hits " + victim + " for " + damage + " damage"
+                        + (target.isAlive() ? "." : (target instanceof Character ? "." : " — " + target.getName() + " falls!")));
+                if (target instanceof Character && !character.isAlive()) {
                     return;
                 }
             } else {
-                result.add("The " + type.name().toLowerCase() + " misses you.");
+                result.add("The " + type.name().toLowerCase() + " misses " + victim + ".");
+            }
+        }
+    }
+
+    /** A badly wounded retainer (<=1/4 HP) must check loyalty (2d6); above their score, they flee. */
+    private void loyaltyChecks(SaveGame save, ExplorationResult result) {
+        for (Retainer retainer : save.livingRetainers()) {
+            if (retainer.getCurrentHp() * 4 <= retainer.getMaxHp() && dice.roll2d6() > retainer.getLoyalty()) {
+                retainer.setFled(true);
+                result.add(retainer.getName() + ", bloodied and afraid, breaks and flees the fight!");
             }
         }
     }
@@ -173,15 +204,14 @@ public class CombatService {
         Character character = save.getCharacter();
         CombatEncounter encounter = session.getCombat();
 
-        int xp = 0;
+        int totalXp = 0;
         for (Monster m : encounter.getMonsters()) {
             if (!m.isAlive()) {
-                xp += m.getType().xpValue();
+                totalXp += m.getType().xpValue();
             }
         }
 
-        Room room = session.currentRoom();
-        room.setCleared(true);
+        session.currentRoom().setCleared(true);
         session.setState(SessionState.EXPLORING);
         session.setCombat(null);
 
@@ -189,8 +219,20 @@ public class CombatService {
         result.add(encounter.isMoraleBroken()
                 ? "The enemy has fled. You hold the room."
                 : "**Victory!** The last of them falls.");
-        if (xp > 0) {
-            result.getLines().addAll(Leveling.awardXp(character, xp, dice));
+
+        if (totalXp > 0) {
+            List<Retainer> survivors = save.livingRetainers();
+            int shares = 1 + survivors.size();
+            int perShare = totalXp / shares;
+            result.getLines().addAll(Leveling.awardXp(character, perShare, dice));
+            for (Retainer retainer : survivors) {
+                // Retainers earn a half-share; surface only their level-ups to keep the log readable.
+                for (String line : Leveling.awardXp(retainer, perShare / 2, dice)) {
+                    if (line.contains("Level up")) {
+                        result.add(line);
+                    }
+                }
+            }
         }
         return result;
     }
@@ -205,7 +247,7 @@ public class CombatService {
         return result;
     }
 
-    /** Flee: the monsters take parting blows, then the party retreats to a random adjacent room. */
+    /** Flee: the monsters take parting blows, then the party retreats; shaken retainers may desert. */
     public ExplorationResult flee(SaveGame save) {
         GameSession session = save.getSession();
         Character character = save.getCharacter();
@@ -214,7 +256,7 @@ public class CombatService {
         }
         ExplorationResult result = new ExplorationResult();
         result.add("You turn to flee — the enemy lashes out as you go!");
-        monstersAttack(save, result);
+        monstersAttackParty(save, result);
         if (!character.isAlive()) {
             return defeat(save, result);
         }
@@ -234,14 +276,41 @@ public class CombatService {
         session.currentRoom().setVisited(true);
         session.setState(SessionState.EXPLORING);
         session.setCombat(null);
+
+        // Retainers who lose their nerve during the rout desert for good.
+        List<Retainer> deserters = new ArrayList<>();
+        for (Retainer retainer : save.livingRetainers()) {
+            if (dice.roll2d6() > retainer.getLoyalty()) {
+                deserters.add(retainer);
+            }
+        }
+        save.getRetainers().removeAll(deserters);
+        for (Retainer d : deserters) {
+            result.add(d.getName() + " loses heart in the rout and abandons you.");
+        }
         result.add("You escape to the " + escape.getDirection().lower() + ". (`look` to get your bearings.)");
         return result;
     }
 
-    private String status(Character character, CombatEncounter encounter) {
+    private List<Combatant> livingParty(SaveGame save) {
+        List<Combatant> party = new ArrayList<>();
+        if (save.getCharacter().isAlive()) {
+            party.add(save.getCharacter());
+        }
+        party.addAll(save.livingRetainers());
+        return party;
+    }
+
+    private String status(SaveGame save) {
+        Character character = save.getCharacter();
+        CombatEncounter encounter = save.getSession().getCombat();
         StringBuilder sb = new StringBuilder();
         sb.append("You: ").append(Math.max(0, character.getCurrentHp())).append("/").append(character.getMaxHp())
-                .append(" hp. Enemies: ");
+                .append(" hp");
+        for (Retainer r : save.livingRetainers()) {
+            sb.append(", ").append(r.getName()).append(" ").append(r.getCurrentHp()).append("/").append(r.getMaxHp());
+        }
+        sb.append(". Enemies: ");
         List<Monster> alive = encounter.aliveMonsters();
         List<String> parts = new ArrayList<>();
         for (int i = 0; i < alive.size(); i++) {

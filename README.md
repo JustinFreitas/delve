@@ -55,6 +55,9 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
 - **Milestone 5** — combat loop: `CombatService` runs B/X side-initiative rounds (`/attack`, `/flee`),
   monster retaliation, morale checks, and 2d6 reaction rolls on encounter; victory awards XP and
   auto-levels the character (HP gain), defeat ends the delve.
+- **Milestone 6** — retainers & hirelings: `/hire` `/party` `/dismiss`. Charisma caps the roster and
+  sets loyalty; retainers fight alongside the PC (shared `Combatant`/`Advanceable` contracts), take
+  hits, earn half-shares of XP, run a loyalty check when bloodied, and may desert in a rout.
 
 See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full milestone roadmap.
 
@@ -73,5 +76,8 @@ See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full mile
 | `/open <dir>` | Open or force a door. |
 | `/attack [n]` | Strike in combat (one round); optionally target enemy #n. |
 | `/flee` | Flee combat to an adjacent room. |
+| `/hire <class> [name]` | Recruit a retainer in town. |
+| `/party` | List your character and retainers. |
+| `/dismiss <name>` | Release a retainer. |
 
 Commands also work via the message prefix (default `!`) or by mentioning the bot.

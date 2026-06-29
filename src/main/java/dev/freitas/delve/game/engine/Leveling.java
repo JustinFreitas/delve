@@ -1,6 +1,5 @@
 package dev.freitas.delve.game.engine;
 
-import dev.freitas.delve.game.model.Character;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,7 +12,7 @@ public final class Leveling {
 
     private Leveling() {}
 
-    public static List<String> awardXp(Character c, int rawXp, Dice dice) {
+    public static List<String> awardXp(Advanceable c, int rawXp, Dice dice) {
         List<String> messages = new ArrayList<>();
         CharacterClass cls = c.getCharacterClass();
         int adjusted = Advancement.adjustedAward(rawXp, cls.xpBonusPercent(c.getAbilities()));
@@ -33,7 +32,7 @@ public final class Leveling {
         return messages;
     }
 
-    private static int hitPointGain(Character c, Dice dice) {
+    private static int hitPointGain(Advanceable c, Dice dice) {
         CharacterClass cls = c.getCharacterClass();
         if (c.getLevel() <= 9) {
             return Math.max(1, dice.d(cls.hitDie()) + c.getAbilities().modifier(Ability.CON));
