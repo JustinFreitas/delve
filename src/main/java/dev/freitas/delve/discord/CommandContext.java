@@ -1,5 +1,6 @@
 package dev.freitas.delve.discord;
 
+import dev.freitas.delve.data.GameStateService;
 import dev.freitas.delve.data.PlayerSaveService;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
@@ -26,10 +27,12 @@ public abstract class CommandContext {
     @Component
     public static class Beans {
         public final PlayerSaveService playerSaves;
+        public final GameStateService gameState;
         CommandManager commandManager;
 
-        public Beans(PlayerSaveService playerSaves) {
+        public Beans(PlayerSaveService playerSaves, GameStateService gameState) {
             this.playerSaves = playerSaves;
+            this.gameState = gameState;
         }
 
         public CommandManager getCommandManager() {

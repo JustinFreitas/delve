@@ -40,7 +40,11 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
 
 ## Status
 
-Milestone 1 complete: bootable skeleton (command framework, persistence + Flyway, `/ping`, `/help`).
+- **Milestone 1** — bootable skeleton (command framework, persistence + Flyway, `/ping`, `/help`).
+- **Milestone 2** — character creation & sheet with full B/X mechanics (abilities + modifiers, the
+  seven classes with requirements, HP from hit dice, AC, saving throws, starting gold/gear/spells),
+  persisted per Discord user as a JSON save blob.
+
 See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full milestone roadmap.
 
 ## Commands (current)
@@ -49,5 +53,7 @@ See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full mile
 |---|---|
 | `/ping` | Liveness check + gateway latency. |
 | `/help` `[command]` | List commands, or detailed help for one. |
+| `/roll-character <class> [name]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling). |
+| `/sheet` | Show your current character sheet. |
 
 Commands also work via the message prefix (default `!`) or by mentioning the bot.
