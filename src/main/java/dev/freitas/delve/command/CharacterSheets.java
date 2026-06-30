@@ -57,6 +57,46 @@ final class CharacterSheets {
         return eb.build();
     }
 
+    /** A paste-ready monospace stat block, wrapped in a Discord code fence. */
+    static String textBlock(Character c) {
+        AbilityScores a = c.getAbilities();
+        SavingThrows.Saves s = SavingThrows.forCharacter(c.getCharacterClass(), c.getLevel());
+        boolean heavy = Encumbrance.heavyLoad(c.getGold());
+        StringBuilder sb = new StringBuilder("```\n");
+        sb.append(c.getName()).append(" — Level ").append(c.getLevel()).append(" ")
+                .append(c.getCharacterClass().displayName()).append("\n");
+        sb.append(String.format("STR %2d (%+d)   INT %2d (%+d)   WIS %2d (%+d)%n",
+                a.score(Ability.STR), a.modifier(Ability.STR),
+                a.score(Ability.INT), a.modifier(Ability.INT),
+                a.score(Ability.WIS), a.modifier(Ability.WIS)));
+        sb.append(String.format("DEX %2d (%+d)   CON %2d (%+d)   CHA %2d (%+d)%n",
+                a.score(Ability.DEX), a.modifier(Ability.DEX),
+                a.score(Ability.CON), a.modifier(Ability.CON),
+                a.score(Ability.CHA), a.modifier(Ability.CHA)));
+        sb.append(String.format("HP %d   AC %d (asc %d)   THAC0 %d%n",
+                c.getMaxHp(), c.armorClass(), c.ascendingArmorClass(), c.thac0()));
+        sb.append(String.format("Saves  D/P %d  Wands %d  Para %d  Breath %d  Spells %d%n",
+                s.deathPoison(), s.wands(), s.paralysisPetrify(), s.breath(), s.spells()));
+        sb.append("Weapon: ").append(c.getMainWeapon()).append(" (").append(c.getMainWeaponDamage()).append(")\n");
+        sb.append("Armor: ").append(c.getArmor().displayName()).append(c.isShield() ? " + shield" : "")
+                .append("   Move ").append(Encumbrance.movementRate(c.getArmor(), heavy)).append("'/turn\n");
+        sb.append("Gold: ").append(c.getGold()).append(" gp   Torches: ").append(c.getTorches());
+        if (c.getHealingPotions() > 0) {
+            sb.append("   Healing potions: ").append(c.getHealingPotions());
+        }
+        sb.append("\n");
+        if (!c.getInventory().isEmpty()) {
+            sb.append("Equipment: ").append(String.join(", ", c.getInventory())).append("\n");
+        }
+        if (!c.getMemorizedSpells().isEmpty()) {
+            sb.append("Prepared: ").append(spellNames(c)).append("\n");
+        }
+        if (!c.getSpellbook().isEmpty()) {
+            sb.append("Spellbook: ").append(String.join(", ", c.getSpellbook())).append("\n");
+        }
+        return sb.append("```").toString();
+    }
+
     private static String spellNames(Character c) {
         return c.getMemorizedSpells().stream()
                 .map(Spell::valueOf)

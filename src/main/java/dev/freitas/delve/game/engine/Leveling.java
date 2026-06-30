@@ -32,6 +32,29 @@ public final class Leveling {
         return messages;
     }
 
+    /**
+     * Advances a character directly to {@code targetLevel}, rolling hit points for each level gained
+     * and setting XP to that level's threshold. Unlike {@link #awardXp}, this does not run the
+     * prime-requisite award adjustment (which would overshoot on a multi-level jump), so it produces
+     * an exact, reproducible level-N character — the basis for pregeneration. Returns one message per
+     * level gained.
+     */
+    public static List<String> advanceTo(Advanceable c, int targetLevel, Dice dice) {
+        List<String> messages = new ArrayList<>();
+        CharacterClass cls = c.getCharacterClass();
+        int capped = Math.min(targetLevel, Advancement.maxLevel(cls));
+        while (c.getLevel() < capped) {
+            c.setLevel(c.getLevel() + 1);
+            int gain = hitPointGain(c, dice);
+            c.setMaxHp(c.getMaxHp() + gain);
+            c.setCurrentHp(c.getCurrentHp() + gain);
+            messages.add("Advanced to level " + c.getLevel() + " " + cls.displayName()
+                    + " (+" + gain + " HP, now " + c.getMaxHp() + ").");
+        }
+        c.setXp(Advancement.xpForLevel(cls, c.getLevel()));
+        return messages;
+    }
+
     private static int hitPointGain(Advanceable c, Dice dice) {
         CharacterClass cls = c.getCharacterClass();
         if (c.getLevel() <= 9) {

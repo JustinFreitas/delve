@@ -13,6 +13,9 @@ machine.
 - **Deterministic rules engine** — no LLM/external API; B/X random tables + template text.
 - **Full B/X ruleset** (classes, levels, XP, spells, saves, morale, encumbrance, treasure).
 - **Procedural dungeons + authored set-pieces**.
+- **Character seeding** — build table-ready PCs/NPCs at a target level (instantly, or by simulated
+  delving) and export them, e.g. to seed a level-5 Desert of Desolation party. Output is pure B/X,
+  so it drops into an OSE-compatible game as-is.
 
 ## Stack
 
@@ -64,8 +67,34 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
   (`content/setpieces.json`); and `/town` to rest, heal the party, pay retainer upkeep, and
   re-prepare spells between delves.
 
-All seven milestones are complete. See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
-for the original roadmap.
+- **Milestones 8–11 — character seeding** (build PCs/NPCs up to a target level for a real campaign):
+  - **M8** — `Leveling.advanceTo` + `PregenService` + `MagicItemTable`; `/pregen <class> [level] [name]`
+    instantly builds a finished, table-ready character (rolls qualifying abilities, advances the level
+    rolling HP per level, scales armor/wealth, grants a few B/X magic items, prepares spells).
+  - **M9** — export: `/export [embed|text|json]` (Discord embed, copy-paste stat block, or a JSON file
+    via the new `PregenExport` schema + `CommandContext.replyFile`).
+  - **M10** — `/autodelve [level] [fast|bx]`: a headless autopilot that fast-forwards a character via
+    simulated delves. **Default pace is by-the-book B/X OSE** (organic monster + 1-XP-per-gp treasure;
+    authentic and slow, may end "exhausted" to be resumed); add `fast` for ~one level every 3–4 delves.
+    The autopilot plays cautiously (avoids deadly rooms, flees losing fights) but the PC can still die.
+  - **M11** — DM tools: `/roster <count> <level> [class]` mints a party of pregens (summary + combined
+    JSON file); `/npc <class> <level> [name]` generates a single named NPC (embed + stat block + JSON).
+    Both are stateless — they never overwrite your own character.
+
+All milestones are complete (56 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+for the roadmap.
+
+### Seeding a Desert of Desolation party (example)
+```
+!pregen fighter 5 Khalil        # instant level-5 PC, plate + a +1 sword + potions
+!export json                    # download the B/X stat block to keep
+!autodelve 5 fast               # or earn it: sim delves at ~3-4 per level
+!roster 4 5                     # DM: a whole level-5 party as one JSON file
+!npc cleric 6 Ahkmenrah         # DM: a named NPC
+```
+
+> **Planned:** the more generous **Gygax75 treasure-allotment tables** will be wired into the treasure
+> economy as an option, with the default always remaining standard B/X OSE rules.
 
 ## Commands (current)
 
@@ -89,5 +118,10 @@ for the original roadmap.
 | `/prepare <spell>` | Memorize a spell into a free slot. |
 | `/quaff` | Drink a potion of healing. |
 | `/town` | Return to town: rest, heal, pay upkeep, re-prepare spells. |
+| `/pregen <class> [level] [name]` | Instantly build a finished character at a level (default 5). |
+| `/export [embed\|text\|json]` | Export your character (embed, stat block, or JSON file). |
+| `/autodelve [level] [fast\|bx]` | Fast-forward your character via simulated delves (default B/X OSE pace). |
+| `/roster <count> <level> [class]` | DM: mint a party of pregens (+ JSON file). |
+| `/npc <class> <level> [name]` | DM: generate a single named NPC (+ JSON file). |
 
 Commands also work via the message prefix (default `!`) or by mentioning the bot.

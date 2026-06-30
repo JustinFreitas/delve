@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 
 /** Context for the legacy prefix/mention message command path (cf. ukulele). */
@@ -50,5 +51,14 @@ public class MessageCommandContext extends CommandContext {
     @Override
     public void replyEmbed(MessageEmbed embed) {
         getChannel().sendMessageEmbeds(embed).queue();
+    }
+
+    @Override
+    public void replyFile(String fileName, byte[] data, String message) {
+        var action = getChannel().sendFiles(FileUpload.fromData(data, fileName));
+        if (message != null && !message.isBlank()) {
+            action = action.setContent(message);
+        }
+        action.queue();
     }
 }

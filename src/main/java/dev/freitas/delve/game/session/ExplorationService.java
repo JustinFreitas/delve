@@ -4,6 +4,7 @@ import dev.freitas.delve.game.Bestiary;
 import dev.freitas.delve.game.dungeon.DungeonGenerator;
 import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.Leveling;
 import dev.freitas.delve.game.engine.SavingThrows;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.ContentType;
@@ -164,9 +165,14 @@ public class ExplorationService {
 
         if (room.isHasTreasure() && !room.isLooted()) {
             room.setLooted(true);
-            character.setGold(character.getGold() + room.getTreasureGold());
+            int gold = room.getTreasureGold();
+            character.setGold(character.getGold() + gold);
             found++;
-            result.add("You find treasure: **" + room.getTreasureGold() + " gp**!");
+            result.add("You find treasure: **" + gold + " gp**!");
+            // B/X awards 1 XP per gold piece recovered from the dungeon — the main route to advancement.
+            if (gold > 0) {
+                result.getLines().addAll(Leveling.awardXp(character, gold, dice));
+            }
             // A fraction of hoards include a potion of healing among the coin.
             if (dice.d(4) == 1) {
                 character.setHealingPotions(character.getHealingPotions() + 1);

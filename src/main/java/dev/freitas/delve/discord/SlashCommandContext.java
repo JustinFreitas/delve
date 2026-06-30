@@ -6,6 +6,7 @@ import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import net.dv8tion.jda.api.utils.messages.MessageEditData;
 
@@ -64,6 +65,25 @@ public class SlashCommandContext extends CommandContext {
             event.getHook().editOriginalEmbeds(embed).queue();
         } else {
             event.getHook().sendMessageEmbeds(embed).queue();
+        }
+    }
+
+    @Override
+    public void replyFile(String fileName, byte[] data, String message) {
+        FileUpload upload = FileUpload.fromData(data, fileName);
+        if (firstReply.getAndSet(false)) {
+            // editOriginal replaces the deferred "thinking" message and attaches the file.
+            var action = event.getHook().editOriginalAttachments(upload);
+            if (message != null && !message.isBlank()) {
+                action = action.setContent(message);
+            }
+            action.queue();
+        } else {
+            var action = event.getHook().sendFiles(upload);
+            if (message != null && !message.isBlank()) {
+                action = action.setContent(message);
+            }
+            action.queue();
         }
     }
 }

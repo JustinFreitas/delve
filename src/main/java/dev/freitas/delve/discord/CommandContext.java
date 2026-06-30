@@ -108,6 +108,9 @@ public abstract class CommandContext {
 
     public abstract void replyEmbed(MessageEmbed embed);
 
+    /** Sends a file attachment (e.g. an exported character JSON) with an optional message. */
+    public abstract void replyFile(String fileName, byte[] data, String message);
+
     public void replyHelp() {
         replyHelp(command);
     }
