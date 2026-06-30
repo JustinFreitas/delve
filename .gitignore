@@ -26,3 +26,8 @@ Thumbs.db
 # Secrets / local overrides
 delve-local.properties
 *.env
+
+# Imported module JSON is the DM's own (from their own PDFs) — keep it local, except the sample.
+src/main/resources/content/modules/*.json
+!src/main/resources/content/modules/sample.json
+content/modules/

@@ -12,6 +12,9 @@ public class Room {
 
     private int id;
     private String description;
+    // Optional area label and boxed read-aloud text, populated when running an authored module.
+    private String name;
+    private String readAloud;
     private Map<Direction, Exit> exits = new EnumMap<>(Direction.class);
 
     private ContentType content = ContentType.EMPTY;
@@ -70,6 +73,22 @@ public class Room {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getReadAloud() {
+        return readAloud;
+    }
+
+    public void setReadAloud(String readAloud) {
+        this.readAloud = readAloud;
     }
 
     public Map<Direction, Exit> getExits() {

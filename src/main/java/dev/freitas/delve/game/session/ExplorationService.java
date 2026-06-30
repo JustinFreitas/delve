@@ -45,12 +45,25 @@ public class ExplorationService {
         this.combat = combat;
     }
 
-    /** Begins a fresh dungeon run for the character, lighting the first torch. */
+    /** Begins a fresh procedurally-generated dungeon run for the character, lighting the first torch. */
     public ExplorationResult enter(SaveGame save) {
+        Dungeon dungeon = generator.generate(LEVELS, ROOMS_PER_LEVEL);
+        return beginDelve(save, dungeon, "You light a torch and descend into the dungeon...");
+    }
+
+    /** Begins a run through a pre-built (authored module) dungeon. */
+    public ExplorationResult enterModule(SaveGame save, Dungeon dungeon, String title) {
+        String intro = title == null || title.isBlank()
+                ? "You light a torch and step into the adventure..."
+                : "You light a torch and enter **" + title + "**...";
+        return beginDelve(save, dungeon, intro);
+    }
+
+    /** Shared setup for any dungeon source: install it in the session and describe the entrance. */
+    private ExplorationResult beginDelve(SaveGame save, Dungeon dungeon, String introLine) {
         Character character = save.getCharacter();
         GameSession session = save.getSession();
 
-        Dungeon dungeon = generator.generate(LEVELS, ROOMS_PER_LEVEL);
         session.setDungeon(dungeon);
         session.setCurrentLevel(0);
         session.setCurrentRoomId(dungeon.level(0).getEntranceRoomId());
@@ -59,7 +72,7 @@ public class ExplorationService {
         session.setState(SessionState.EXPLORING);
 
         ExplorationResult result = new ExplorationResult();
-        result.add("You light a torch and descend into the dungeon...");
+        result.add(introLine);
         if (character.getTorches() > 0) {
             character.setTorches(character.getTorches() - 1);
             session.setTorchTurnsRemaining(TORCH_TURNS);
@@ -346,7 +359,13 @@ public class ExplorationService {
         if (session.isInDarkness()) {
             sb.append("It is pitch black. You can barely feel your way around.\n");
         }
+        if (room.getName() != null && !room.getName().isBlank()) {
+            sb.append("__").append(room.getName()).append("__\n");
+        }
         sb.append("You are in ").append(room.getDescription()).append(".");
+        if (room.getReadAloud() != null && !room.getReadAloud().isBlank()) {
+            sb.append("\n> ").append(room.getReadAloud().replace("\n", "\n> "));
+        }
 
         if (room.hasLiveMonster()) {
             sb.append("\n⚔️ **").append(room.getMonsterCount()).append(" ")

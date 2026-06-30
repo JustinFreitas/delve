@@ -81,7 +81,21 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
     JSON file); `/npc <class> <level> [name]` generates a single named NPC (embed + stat block + JSON).
     Both are stateless — they never overwrite your own character.
 
-All milestones are complete (56 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+- **Modules from a PDF** — run a published B/X module instead of a generated dungeon. An **offline,
+  one-time** converter (the `importModule` Gradle task) sends a module — a FineReader **searchable PDF**
+  (corrected OCR text + maps, ingested natively by Claude) or a **TXT/Markdown** export — to the Claude
+  API and writes an editable `content/modules/<name>.json` (rooms, exits, monsters, treasure, traps).
+  `ModuleLoader` maps that JSON into the runtime `Dungeon` (exits made bidirectional, monsters resolved
+  against the `Bestiary`), and `/enter <module>` plays it through the same exploration/combat engine.
+  **The running bot has no API dependency** — the Anthropic SDK lives only in the importer source set.
+  Process only your own legally-obtained PDFs; the extracted JSON stays local.
+
+  ```sh
+  ANTHROPIC_API_KEY=… ./gradlew importModule --args="--pdf=my-module.pdf --name=mymodule"
+  # review content/modules/mymodule.json, then in the bot:  !loadmodule   →   !enter mymodule
+  ```
+
+All milestones are complete (59 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 ### Seeding a Desert of Desolation party (example)
@@ -104,7 +118,8 @@ for the roadmap.
 | `/help` `[command]` | List commands, or detailed help for one. |
 | `/roll-character <class> [name]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling). |
 | `/sheet` | Show your current character sheet. |
-| `/enter` | Begin a dungeon delve. |
+| `/enter [module]` | Begin a delve — procedural, or run an authored module by name. |
+| `/loadmodule` | List authored modules available to `/enter`. |
 | `/look` | Describe the current room (free). |
 | `/move <dir>` | Move north/south/east/west, or up/down at stairs (one dungeon turn). |
 | `/search` | Search for secret doors, traps and treasure (one dungeon turn). |

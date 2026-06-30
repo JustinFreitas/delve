@@ -24,6 +24,21 @@ java {
 group = "dev.freitas"
 version = "0.1.0"
 
+// Offline module-importer source set. Its Anthropic-SDK + PDFBox dependencies live ONLY here, so the
+// bot's main/bootJar classpath stays API-key-free. Run via the `importModule` task below.
+sourceSets {
+    create("importer") {
+        java.srcDir("src/importer/java")
+        compileClasspath += sourceSets["main"].output
+        runtimeClasspath += sourceSets["main"].output
+    }
+}
+
+// Let the importer see the main app's libraries (Jackson, SLF4J) in addition to its own.
+val importerImplementation: Configuration by configurations.getting {
+    extendsFrom(configurations.implementation.get())
+}
+
 repositories {
     mavenCentral()
     maven {
@@ -64,6 +79,21 @@ dependencies {
     }
     // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
     testImplementation("org.junit.jupiter:junit-jupiter:5.14.3")
+
+    // Offline importer only (kept off the bot classpath):
+    // https://github.com/anthropics/anthropic-sdk-java — PDF -> module.json conversion via Claude.
+    importerImplementation("com.anthropic:anthropic-java:2.34.0")
+    // https://mvnrepository.com/artifact/org.apache.pdfbox/pdfbox — page count / size guard for big PDFs.
+    importerImplementation("org.apache.pdfbox:pdfbox:3.0.5")
+}
+
+// One-time, offline PDF -> content/modules/<name>.json conversion. Needs ANTHROPIC_API_KEY.
+// Usage: ./gradlew importModule --args="--pdf=B2.pdf --name=keep"
+tasks.register<JavaExec>("importModule") {
+    group = "application"
+    description = "Convert a (FineReader searchable) PDF or text export of a B/X module into module.json."
+    classpath = sourceSets["importer"].runtimeClasspath
+    mainClass.set("dev.freitas.delve.importer.ImporterMain")
 }
 
 tasks.withType<BootJar> {

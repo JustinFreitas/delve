@@ -1,0 +1,49 @@
+{
+  "title": "The Sunken Antechamber",
+  "levels": [
+    {
+      "depth": 1,
+      "entranceRoomId": 1,
+      "rooms": [
+        {
+          "id": 1,
+          "name": "Area 1: Collapsed Antechamber",
+          "description": "a rubble-choked antechamber where a stair once rose",
+          "readAloud": "Fallen masonry litters the floor. Two ways lead onward: an open arch east and a closed door to the south.",
+          "exits": [
+            { "direction": "east", "toRoomId": 2, "door": "open" },
+            { "direction": "south", "toRoomId": 3, "door": "closed" }
+          ]
+        },
+        {
+          "id": 2,
+          "name": "Area 2: Guard Post",
+          "description": "a cramped guard post with a cold brazier",
+          "monster": { "name": "Goblin", "count": 3 },
+          "treasureGold": 80,
+          "exits": [
+            { "direction": "west", "toRoomId": 1, "door": "open" },
+            { "direction": "north", "toRoomId": 4, "door": "stuck" }
+          ]
+        },
+        {
+          "id": 3,
+          "name": "Area 3: Flooded Cell",
+          "description": "a knee-deep flooded cell",
+          "trap": { "description": "a concealed pit beneath the water" },
+          "exits": [
+            { "direction": "north", "toRoomId": 1, "door": "closed" }
+          ]
+        },
+        {
+          "id": 4,
+          "name": "Area 4: Shrine of the Pale Toad",
+          "description": "a defaced shrine reeking of stagnant water",
+          "special": "A squat idol of a toad squats on a cracked altar; its gemstone eyes are long pried out.",
+          "treasureGold": 200,
+          "exits": []
+        }
+      ]
+    }
+  ]
+}

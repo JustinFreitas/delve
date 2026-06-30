@@ -3,12 +3,13 @@ package dev.freitas.delve.command;
 import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
+import dev.freitas.delve.game.dungeon.ModuleLoader;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.session.ExplorationResult;
 import dev.freitas.delve.game.session.ExplorationService;
 import org.springframework.stereotype.Component;
 
-/** Begins a fresh dungeon delve: {@code /enter}. */
+/** Begins a fresh dungeon delve: {@code /enter [module]} (no arg = procedurally generated). */
 @Component
 public class EnterCommand extends Command {
 
@@ -38,14 +39,29 @@ public class EnterCommand extends Command {
             return;
         }
 
-        ExplorationResult result = exploration.enter(save);
+        String moduleName = ctx.getArgumentText().trim();
+        ExplorationResult result;
+        if (moduleName.isBlank()) {
+            result = exploration.enter(save);
+        } else {
+            ModuleLoader.LoadedModule loaded = ModuleLoader.load(moduleName);
+            if (loaded == null) {
+                ctx.reply("No module named **" + moduleName + "**. See `" + ctx.getPrefix()
+                        + "loadmodule` for what's available.");
+                return;
+            }
+            result = exploration.enterModule(save, loaded.dungeon(), loaded.title());
+            loaded.warnings().forEach(w -> result.add("_" + w + "_"));
+        }
+
         ctx.getBeans().gameState.save(userId, save);
         ctx.reply(result.text());
     }
 
     @Override
     public void provideHelp(HelpContext help) {
-        help.addUsage("");
-        help.addDescription("Begins a new dungeon delve with your current character.");
+        help.addUsage("[module]");
+        help.addDescription("Begins a delve. With no argument the dungeon is procedurally generated; "
+                + "give a module name (see `loadmodule`) to run an authored adventure.");
     }
 }
