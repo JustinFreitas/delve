@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>delve — B/X dungeon crawler</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>⚔️ delve</h1>
+    <div id="who"></div>
+  </header>
+
+  <!-- Shown when not logged in -->
+  <section id="login" class="hidden">
+    <p>A text-based B/X dungeon crawler. Log in with Discord to play — your character is shared with the bot.</p>
+    <a class="btn primary" href="/oauth2/authorization/discord">Log in with Discord</a>
+  </section>
+
+  <!-- Main app -->
+  <main id="app" class="hidden">
+    <div class="columns">
+      <div class="log-col">
+        <div id="log" class="log" aria-live="polite"></div>
+        <div class="controls">
+          <div class="row" id="move-controls">
+            <button data-move="north">N</button>
+            <button data-move="south">S</button>
+            <button data-move="east">E</button>
+            <button data-move="west">W</button>
+            <button data-move="up">↑ up</button>
+            <button data-move="down">↓ down</button>
+          </div>
+          <div class="row">
+            <button data-action="look">Look</button>
+            <button data-action="search">Search</button>
+            <button data-action="attack">Attack</button>
+            <button data-action="flee">Flee</button>
+            <button data-action="quaff">Quaff</button>
+            <button data-action="town">Town</button>
+            <button data-action="party">Party</button>
+          </div>
+          <div class="row">
+            <input id="cmd" type="text" placeholder="open north · cast magic missile 1 · prepare sleep · hire fighter Bryn" />
+            <button id="cmd-send">Send</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <div class="panel" id="state-panel"><h3>Status</h3><div id="state"></div></div>
+
+        <div class="panel">
+          <h3>Character</h3>
+          <div id="character"><em>None yet.</em></div>
+          <div class="row">
+            <input id="roll-class" type="text" placeholder="class (e.g. fighter)" />
+            <input id="roll-name" type="text" placeholder="name (optional)" />
+          </div>
+          <div class="row">
+            <button id="roll-btn">Roll level 1</button>
+            <input id="pregen-level" type="number" min="1" max="14" value="5" />
+            <button id="pregen-btn">Pregen</button>
+          </div>
+          <div class="row">
+            <button id="export-text">Export text</button>
+            <button id="export-json">Export JSON</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Modules</h3>
+          <select id="module-select"><option value="">— procedural —</option></select>
+          <button id="enter-btn">Enter</button>
+        </div>
+
+        <div class="panel">
+          <h3>DM tools</h3>
+          <div class="row">
+            <input id="npc-class" type="text" placeholder="class" />
+            <input id="npc-level" type="number" min="1" max="14" value="5" />
+            <input id="npc-name" type="text" placeholder="NPC name" />
+          </div>
+          <button id="npc-btn">Generate NPC (JSON)</button>
+          <div class="row">
+            <input id="roster-count" type="number" min="1" max="8" value="4" />
+            <input id="roster-level" type="number" min="1" max="14" value="5" />
+            <button id="roster-btn">Roster (JSON)</button>
+          </div>
+        </div>
+
+        <button id="logout" class="btn">Log out</button>
+      </aside>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

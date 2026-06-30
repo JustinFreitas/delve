@@ -17,11 +17,16 @@ machine.
   delving) and export them, e.g. to seed a level-5 Desert of Desolation party. Output is pure B/X,
   so it drops into an OSE-compatible game as-is.
 
+- **Web interface (optional)** — play and use the tools in a browser as well as Discord. Logs in with
+  **Discord OAuth**, so the web session uses your Discord user id and shares the **same character/party
+  /delve** as the bot. Off by default; see [Web interface](#web-interface).
+
 ## Stack
 
 - Java 25 (virtual threads for command execution)
 - Spring Boot 4 (DI, config, Spring Data JDBC persistence)
 - JDA 6 (Discord gateway + slash commands; no audio module)
+- Spring Web + Spring Security (optional web interface; OAuth2 login with Discord)
 - H2 (file mode) + Flyway migrations + Caffeine cache
 
 ## Running
@@ -33,6 +38,39 @@ DISCORD_TOKEN=your-token-here ./gradlew bootRun
 ```
 
 Configuration lives in `src/main/resources/delve.properties` (token, prefix, activity, datasource).
+
+## Web interface
+
+Optional browser front-end over the **same services and saves** as the bot — it's a second front-end,
+not a fork. Authentication is **Discord OAuth**: because Discord's `/users/@me` id is the same id JDA
+uses, logging in on the web gives you the exact same character/party/delve as the bot (play on the web,
+continue in Discord, seamlessly). Off by default (`config.web.enabled=false`) so the bot can run
+headless.
+
+To enable it:
+
+1. Create a **Discord application** (Developer Portal → OAuth2), add a redirect URI
+   `https://your-host/login/oauth2/code/discord` (or `http://localhost:8080/login/oauth2/code/discord`
+   locally), and copy the client id/secret.
+2. Run with the web env vars:
+   ```sh
+   DISCORD_TOKEN=… \
+   WEB_ENABLED=true \
+   DISCORD_OAUTH_CLIENT_ID=… DISCORD_OAUTH_CLIENT_SECRET=… \
+   WEB_ALLOWED_USER_IDS=<your-discord-id>[,more]   # optional allowlist; empty = any Discord user \
+   ./gradlew bootRun
+   ```
+3. Open the host, **Log in with Discord**, then play (roll/pregen a PC, enter a module, fight) and use
+   the DM tools (pregen/roster/npc, export to text/JSON) from the sidebar.
+
+The web UI is a lean, dependency-free static page (`src/main/resources/static/`) talking to a REST API
+(`/api/**`) via a shared `GameFacade`. **The web app holds no Anthropic key** — PDF→module conversion
+stays the offline `importModule` task; the web only lists and plays already-converted modules.
+
+**Public deployment:** terminate TLS at a reverse proxy (the app sets `forward-headers-strategy` so
+OAuth redirects resolve to `https://`), set `WEB_COOKIE_SECURE=true`, set `WEB_ALLOWED_USER_IDS` to the
+people you actually want, and rely on the built-in CSRF protection and per-user rate limit
+(`config.web.requests-per-minute`).
 
 ## Build & test
 
@@ -95,7 +133,13 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
   # review content/modules/mymodule.json, then in the bot:  !loadmodule   →   !enter mymodule
   ```
 
-All milestones are complete (59 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+- **Web interface** — optional browser front-end (Spring Web + Spring Security, **Discord OAuth**,
+  shared saves) exposing play, DM tools, and module running over a REST API + lean static UI; a shared
+  `GameFacade` backs both web and Discord. Public-deployment hardening (CSRF, per-user rate limit,
+  Discord-id allowlist, forwarded-headers for TLS) included; the web app stays Anthropic-key-free.
+  See [Web interface](#web-interface).
+
+All milestones are complete (66 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 ### Seeding a Desert of Desolation party (example)

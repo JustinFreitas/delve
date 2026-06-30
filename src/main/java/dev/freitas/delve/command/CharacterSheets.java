@@ -11,7 +11,7 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 
 /** Renders a {@link Character} as a Discord embed, shared by {@code /roll-character} and {@code /sheet}. */
-final class CharacterSheets {
+public final class CharacterSheets {
 
     private CharacterSheets() {}
 
@@ -57,8 +57,8 @@ final class CharacterSheets {
         return eb.build();
     }
 
-    /** A paste-ready monospace stat block, wrapped in a Discord code fence. */
-    static String textBlock(Character c) {
+    /** A paste-ready monospace stat block, wrapped in a Discord code fence. Reused by the web export. */
+    public static String textBlock(Character c) {
         AbilityScores a = c.getAbilities();
         SavingThrows.Saves s = SavingThrows.forCharacter(c.getCharacterClass(), c.getLevel());
         boolean heavy = Encumbrance.heavyLoad(c.getGold());

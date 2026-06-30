@@ -55,6 +55,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jdbc:$springBootVersion")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor:$springBootVersion")
 
+    // Optional web interface (gated by config.web.enabled): REST API + Discord-OAuth login.
+    // Additive — the JDA bot still runs in the same process.
+    implementation("org.springframework.boot:spring-boot-starter-web:$springBootVersion")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client:$springBootVersion")
+
     // https://github.com/discord-jda/JDA  — Discord gateway + slash commands (no audio module used).
     implementation("net.dv8tion:JDA:6.4.2") {
         exclude(module = "opus-java")
@@ -79,6 +84,8 @@ dependencies {
     }
     // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
     testImplementation("org.junit.jupiter:junit-jupiter:5.14.3")
+    // Spring Security test support — oauth2Login() request post-processor for MockMvc web tests.
+    testImplementation("org.springframework.security:spring-security-test")
 
     // Offline importer only (kept off the bot classpath):
     // https://github.com/anthropics/anthropic-sdk-java — PDF -> module.json conversion via Claude.
