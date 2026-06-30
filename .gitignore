@@ -26,6 +26,9 @@ Thumbs.db
 # Secrets / local overrides
 delve-local.properties
 *.env
+# PM2 local secrets (delve.env.example is the committed template)
+delve.env
+!delve.env.example
 
 # Imported module JSON is the DM's own (from their own PDFs) — keep it local, except the sample.
 src/main/resources/content/modules/*.json
