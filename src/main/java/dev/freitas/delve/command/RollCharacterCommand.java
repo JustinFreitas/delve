@@ -8,6 +8,7 @@ import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
+import dev.freitas.delve.game.session.SpellService;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,11 +21,13 @@ public class RollCharacterCommand extends Command {
 
     private final Dice dice;
     private final CharacterFactory characterFactory;
+    private final SpellService spells;
 
-    public RollCharacterCommand(Dice dice, CharacterFactory characterFactory) {
+    public RollCharacterCommand(Dice dice, CharacterFactory characterFactory, SpellService spells) {
         super("roll-character", "rollchar", "newchar");
         this.dice = dice;
         this.characterFactory = characterFactory;
+        this.spells = spells;
     }
 
     @Override
@@ -51,6 +54,7 @@ public class RollCharacterCommand extends Command {
         }
 
         Character character = characterFactory.create(name, characterClass, abilities);
+        spells.autoPrepare(character); // a fresh caster is ready to cast (no-op for non-casters)
 
         boolean replaced = ctx.getBeans().gameState.load(ctx.getInvokerUserId()).hasCharacter();
         ctx.getBeans().gameState.mutate(ctx.getInvokerUserId(), save -> save.setCharacter(character));

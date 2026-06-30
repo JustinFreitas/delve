@@ -19,13 +19,14 @@ import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
+import dev.freitas.delve.game.session.SpellService;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 class RetainerTest {
 
     private final Dice dice = new Dice(new Random(21));
-    private final CombatService combat = new CombatService(dice);
+    private final CombatService combat = new CombatService(dice, new SpellService(dice));
     private final CharacterFactory characterFactory = new CharacterFactory(dice);
     private final RetainerFactory retainerFactory = new RetainerFactory(dice);
 

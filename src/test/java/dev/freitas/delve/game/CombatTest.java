@@ -17,13 +17,14 @@ import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
+import dev.freitas.delve.game.session.SpellService;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 class CombatTest {
 
     private final Dice dice = new Dice(new Random(13));
-    private final CombatService combat = new CombatService(dice);
+    private final CombatService combat = new CombatService(dice, new SpellService(dice));
     private final CharacterFactory factory = new CharacterFactory(dice);
 
     @Test

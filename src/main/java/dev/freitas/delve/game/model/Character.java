@@ -42,6 +42,8 @@ public class Character implements Combatant, Advanceable {
 
     private List<String> inventory = new ArrayList<>();
     private List<String> spellbook = new ArrayList<>();
+    private List<String> memorizedSpells = new ArrayList<>();
+    private int healingPotions = 0;
 
     public Character() {}
 
@@ -206,5 +208,21 @@ public class Character implements Combatant, Advanceable {
 
     public void setSpellbook(List<String> spellbook) {
         this.spellbook = spellbook;
+    }
+
+    public List<String> getMemorizedSpells() {
+        return memorizedSpells;
+    }
+
+    public void setMemorizedSpells(List<String> memorizedSpells) {
+        this.memorizedSpells = memorizedSpells;
+    }
+
+    public int getHealingPotions() {
+        return healingPotions;
+    }
+
+    public void setHealingPotions(int healingPotions) {
+        this.healingPotions = healingPotions;
     }
 }

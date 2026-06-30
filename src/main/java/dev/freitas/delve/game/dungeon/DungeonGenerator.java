@@ -68,7 +68,42 @@ public class DungeonGenerator {
             dungeon.addLevel(generateLevel(depth, roomsPerLevel));
         }
         linkStairs(dungeon);
+        stampSetPiece(dungeon);
         return dungeon;
+    }
+
+    /** Stamps one authored set-piece into the deepest level, over a non-entrance, non-stairs room. */
+    private void stampSetPiece(Dungeon dungeon) {
+        List<SetPiece> setPieces = SetPieceLoader.load();
+        if (setPieces.isEmpty()) {
+            return;
+        }
+        DungeonLevel deepest = dungeon.level(dungeon.levelCount() - 1);
+        List<Room> candidates = new ArrayList<>();
+        for (Room r : deepest.getRooms().values()) {
+            if (r.getId() != deepest.getEntranceRoomId() && !r.isStairsUp() && !r.isStairsDown()) {
+                candidates.add(r);
+            }
+        }
+        if (candidates.isEmpty()) {
+            return;
+        }
+        SetPiece piece = setPieces.get(dice.d(setPieces.size()) - 1);
+        Room room = candidates.get(dice.d(candidates.size()) - 1);
+        room.setDescription(piece.description());
+        room.setSpecialText(piece.specialText());
+        if (piece.guardianMonster() != null && piece.guardianCount() > 0) {
+            room.setContent(ContentType.MONSTER);
+            room.setMonsterName(piece.guardianMonster());
+            room.setMonsterCount(piece.guardianCount());
+            room.setCleared(false);
+        } else {
+            room.setContent(ContentType.SPECIAL);
+        }
+        if (piece.treasureGold() > 0) {
+            room.setHasTreasure(true);
+            room.setTreasureGold(piece.treasureGold());
+        }
     }
 
     private DungeonLevel generateLevel(int depth, int roomCount) {

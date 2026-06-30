@@ -1,0 +1,26 @@
+[
+  {
+    "name": "The Sealed Crypt",
+    "description": "a vaulted crypt, its air dead and cold",
+    "specialText": "A great stone sarcophagus dominates the chamber, its lid carved with a screaming face.",
+    "guardianMonster": "Skeleton",
+    "guardianCount": 4,
+    "treasureGold": 600
+  },
+  {
+    "name": "The Goblin Warren",
+    "description": "a reeking warren of filth-streaked tunnels",
+    "specialText": "Crude totems of bone and hide ring a cold fire pit.",
+    "guardianMonster": "Hobgoblin",
+    "guardianCount": 3,
+    "treasureGold": 400
+  },
+  {
+    "name": "The Forgotten Shrine",
+    "description": "a ruined shrine to a nameless god",
+    "specialText": "A cracked altar glistens with old, dark stains. You feel watched.",
+    "guardianMonster": null,
+    "guardianCount": 0,
+    "treasureGold": 250
+  }
+]

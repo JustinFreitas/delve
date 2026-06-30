@@ -2,7 +2,9 @@ package dev.freitas.delve.command;
 
 import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.AbilityScores;
+import dev.freitas.delve.game.engine.Encumbrance;
 import dev.freitas.delve.game.engine.SavingThrows;
+import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.model.Character;
 import java.awt.Color;
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -30,15 +32,37 @@ final class CharacterSheets {
         eb.addField("Gold", c.getGold() + " gp", true);
         String armorLine = c.getArmor().displayName() + (c.isShield() ? " + shield" : "");
         eb.addField("Worn", armorLine, true);
-        eb.addBlankField(true);
+        boolean heavy = Encumbrance.heavyLoad(c.getGold());
+        eb.addField("Movement",
+                Encumbrance.movementRate(c.getArmor(), heavy) + "'/turn (" + Encumbrance.descriptor(c.getArmor(), heavy) + ")",
+                true);
+
+        StringBuilder supplies = new StringBuilder();
+        supplies.append("Weapon: ").append(c.getMainWeapon()).append(" (").append(c.getMainWeaponDamage()).append(")");
+        supplies.append("\nTorches: ").append(c.getTorches());
+        if (c.getHealingPotions() > 0) {
+            supplies.append("\nHealing potions: ").append(c.getHealingPotions());
+        }
+        eb.addField("Supplies", supplies.toString(), false);
 
         if (!c.getInventory().isEmpty()) {
             eb.addField("Equipment", String.join(", ", c.getInventory()), false);
+        }
+        if (!c.getMemorizedSpells().isEmpty()) {
+            eb.addField("Prepared spells", spellNames(c), true);
         }
         if (!c.getSpellbook().isEmpty()) {
             eb.addField("Spellbook", String.join(", ", c.getSpellbook()), false);
         }
         return eb.build();
+    }
+
+    private static String spellNames(Character c) {
+        return c.getMemorizedSpells().stream()
+                .map(Spell::valueOf)
+                .map(Spell::displayName)
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("—");
     }
 
     private static String abilitiesBlock(AbilityScores a) {

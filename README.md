@@ -58,8 +58,14 @@ Configuration lives in `src/main/resources/delve.properties` (token, prefix, act
 - **Milestone 6** — retainers & hirelings: `/hire` `/party` `/dismiss`. Charisma caps the roster and
   sets loyalty; retainers fight alongside the PC (shared `Combatant`/`Advanceable` contracts), take
   hits, earn half-shares of XP, run a loyalty check when bloodied, and may desert in a rout.
+- **Milestone 7** — full B/X depth: spells (`/cast`, `/prepare`) with the B/X slot tables, Magic
+  Missile / Sleep / Cure Light Wounds; `/quaff` healing potions; encumbrance & movement rates on the
+  sheet; richer treasure (potions in hoards); authored set-pieces stamped into generated levels
+  (`content/setpieces.json`); and `/town` to rest, heal the party, pay retainer upkeep, and
+  re-prepare spells between delves.
 
-See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full milestone roadmap.
+All seven milestones are complete. See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+for the original roadmap.
 
 ## Commands (current)
 
@@ -79,5 +85,9 @@ See `../../.claude/plans/would-it-be-possible-wise-lantern.md` for the full mile
 | `/hire <class> [name]` | Recruit a retainer in town. |
 | `/party` | List your character and retainers. |
 | `/dismiss <name>` | Release a retainer. |
+| `/cast <spell> [target]` | Cast a prepared spell (combat or utility). |
+| `/prepare <spell>` | Memorize a spell into a free slot. |
+| `/quaff` | Drink a potion of healing. |
+| `/town` | Return to town: rest, heal, pay upkeep, re-prepare spells. |
 
 Commands also work via the message prefix (default `!`) or by mentioning the bot.

@@ -18,6 +18,7 @@ import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
+import dev.freitas.delve.game.session.SpellService;
 import dev.freitas.delve.game.session.ExplorationService;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -82,7 +83,7 @@ class DungeonExplorationTest {
     @Test
     void enterStartsTheDelveAndLightsATorch() {
         Dice dice = new Dice(new Random(3));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)));
         SaveGame save = newSaveWithCharacter(6);
 
         var result = service.enter(save);
@@ -97,7 +98,7 @@ class DungeonExplorationTest {
     @Test
     void movingAdvancesDungeonTurnsAndBurnsLight() {
         Dice dice = new Dice(new Random(11));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)));
         SaveGame save = twoRoomSave(dice, 0); // no spare torches; current torch has 6 turns
 
         // Alternate east/west between the two rooms. Starting in room 0, even steps go east, odd west,
@@ -123,7 +124,7 @@ class DungeonExplorationTest {
     @Test
     void searchGathersTreasureAndCanRevealSecretDoors() {
         Dice dice = new Dice(new Random(5));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)));
         SaveGame save = twoRoomSave(dice, 3);
         Room room = save.getSession().currentRoom();
         room.setHasTreasure(true);
@@ -147,7 +148,7 @@ class DungeonExplorationTest {
     @Test
     void trapsSpringSometimesAndCanBeAvoidedWhenDetected() {
         Dice dice = new Dice(new Random(8));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)));
 
         int sprang = 0;
         for (int trial = 0; trial < 200; trial++) {

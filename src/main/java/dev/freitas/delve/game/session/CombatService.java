@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.AttackResolver;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Leveling;
+import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.CombatEncounter;
 import dev.freitas.delve.game.model.Exit;
@@ -30,9 +31,11 @@ import org.springframework.stereotype.Service;
 public class CombatService {
 
     private final Dice dice;
+    private final SpellService spells;
 
-    public CombatService(Dice dice) {
+    public CombatService(Dice dice, SpellService spells) {
         this.dice = dice;
+        this.spells = spells;
     }
 
     /** B/X reaction: undead are mindlessly hostile; otherwise 2d6 + CHA modifier, hostile on 8 or less. */
@@ -78,7 +81,30 @@ public class CombatService {
         return continueRound(save, targetIndex, new ExplorationResult());
     }
 
+    /** Casts a combat spell as the player's action for one round (starting the fight if needed). */
+    public ExplorationResult castRound(SaveGame save, Spell spell, Integer targetIndex) {
+        Character character = save.getCharacter();
+        if (!spells.isMemorized(character, spell)) {
+            return ExplorationResult.failure("You don't have **" + spell.displayName() + "** prepared.");
+        }
+        GameSession session = save.getSession();
+        if (session.getState() != SessionState.IN_COMBAT && !session.currentRoom().hasLiveMonster()) {
+            return ExplorationResult.failure("There is nothing here to target.");
+        }
+        ExplorationResult result =
+                session.getState() != SessionState.IN_COMBAT ? startCombat(save) : new ExplorationResult();
+        return resolveRound(save, result, () -> {
+            applyPlayerSpell(save, spell, targetIndex, result);
+            retainersAttack(save, result);
+        });
+    }
+
     private ExplorationResult continueRound(SaveGame save, Integer targetIndex, ExplorationResult result) {
+        return resolveRound(save, result, () -> partyAttacks(save, targetIndex, result));
+    }
+
+    /** Runs one round given the player's chosen action, with side initiative and the aftermath checks. */
+    private ExplorationResult resolveRound(SaveGame save, ExplorationResult result, Runnable playerAction) {
         Character character = save.getCharacter();
         CombatEncounter encounter = save.getSession().getCombat();
         encounter.setRound(encounter.getRound() + 1);
@@ -86,14 +112,14 @@ public class CombatService {
 
         boolean playerFirst = dice.d(6) >= dice.d(6); // side initiative, ties to the player
         if (playerFirst) {
-            partyAttacks(save, targetIndex, result);
+            playerAction.run();
             if (!encounter.isOver()) {
                 monstersAttackParty(save, result);
             }
         } else {
             monstersAttackParty(save, result);
             if (character.isAlive() && !encounter.aliveMonsters().isEmpty()) {
-                partyAttacks(save, targetIndex, result);
+                playerAction.run();
             }
         }
 
@@ -112,12 +138,64 @@ public class CombatService {
 
     private void partyAttacks(SaveGame save, Integer targetIndex, ExplorationResult result) {
         Character character = save.getCharacter();
+        attack(character, "your " + character.getMainWeapon().toLowerCase(),
+                save.getSession().getCombat(), targetIndex, result);
+        retainersAttack(save, result);
+    }
+
+    private void retainersAttack(SaveGame save, ExplorationResult result) {
         CombatEncounter encounter = save.getSession().getCombat();
-        attack(character, "your " + character.getMainWeapon().toLowerCase(), encounter, targetIndex, result);
         for (Retainer retainer : save.livingRetainers()) {
             if (!encounter.aliveMonsters().isEmpty()) {
                 attack(retainer, retainer.getMainWeapon().toLowerCase(), encounter, null, result);
             }
+        }
+    }
+
+    /** Applies the player's spell: a damaging bolt, a sleep effect, or in-combat healing. */
+    private void applyPlayerSpell(SaveGame save, Spell spell, Integer targetIndex, ExplorationResult result) {
+        Character character = save.getCharacter();
+        CombatEncounter encounter = save.getSession().getCombat();
+        spells.consume(character, spell);
+        switch (spell.effect()) {
+            case DAMAGE -> {
+                List<Monster> alive = encounter.aliveMonsters();
+                if (alive.isEmpty()) {
+                    return;
+                }
+                int index = (targetIndex != null && targetIndex >= 1 && targetIndex <= alive.size())
+                        ? targetIndex - 1 : 0;
+                Monster target = alive.get(index);
+                int damage = SpellService.MAGIC_MISSILE_DAMAGE.roll(dice);
+                target.takeDamage(damage);
+                result.add("You loose **" + spell.displayName() + "** at the " + target.getType().name().toLowerCase()
+                        + " for " + damage + " automatic damage"
+                        + (target.isAlive() ? " (" + target.getCurrentHp() + " hp left)." : " — it is destroyed!"));
+            }
+            case SLEEP -> {
+                int budget = dice.roll(2, 8); // 2d8 Hit Dice of creatures affected
+                int slept = 0;
+                List<Monster> byHd = new ArrayList<>(encounter.aliveMonsters());
+                byHd.sort((a, b) -> Integer.compare(a.getType().hitDiceCount(), b.getType().hitDiceCount()));
+                for (Monster m : byHd) {
+                    int hd = Math.max(1, m.getType().hitDiceCount());
+                    if (m.getType().hitDiceCount() <= 4 && budget >= hd) {
+                        m.takeDamage(m.getMaxHp()); // falls asleep and is dispatched
+                        budget -= hd;
+                        slept++;
+                    }
+                }
+                result.add("You cast **Sleep** — " + slept + " enemy" + (slept == 1 ? "" : " enemies")
+                        + " collapse" + (slept == 1 ? "s" : "") + " into helpless slumber.");
+            }
+            case HEAL -> {
+                int healed = SpellService.CURE_LIGHT_WOUNDS.roll(dice);
+                int before = character.getCurrentHp();
+                character.setCurrentHp(Math.min(character.getMaxHp(), character.getCurrentHp() + healed));
+                result.add("You cast **" + spell.displayName() + "**, recovering "
+                        + (character.getCurrentHp() - before) + " hp.");
+            }
+            default -> result.add("You cast **" + spell.displayName() + "**.");
         }
     }
 

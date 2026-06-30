@@ -167,6 +167,11 @@ public class ExplorationService {
             character.setGold(character.getGold() + room.getTreasureGold());
             found++;
             result.add("You find treasure: **" + room.getTreasureGold() + " gp**!");
+            // A fraction of hoards include a potion of healing among the coin.
+            if (dice.d(4) == 1) {
+                character.setHealingPotions(character.getHealingPotions() + 1);
+                result.add("Among the coins is a **potion of healing**! (`quaff` to drink.)");
+            }
         }
 
         if (found == 0) {
