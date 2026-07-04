@@ -146,7 +146,7 @@ public class LightingService {
 
     private boolean hasFreeHand(Combatant c) {
         if (c instanceof Character pc) {
-            return Hands.free(pc.getMainWeapon(), pc.isShield(), false) >= 1;
+            return Hands.free(pc.getMainWeapon(), pc.isShield(), false, pc.getOffHandWeapon() != null) >= 1;
         }
         if (c instanceof Retainer r) {
             return Hands.free(r.getMainWeapon(), r.isShield(), false) >= 1;

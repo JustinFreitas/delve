@@ -46,4 +46,24 @@ class HandsTest {
         assertThat(Hands.used("Sling & 30 stones", false, true)).isEqualTo(2);
         assertThat(Hands.fits("Sling & 30 stones", false, true)).isTrue();
     }
+
+    @Test
+    void offHandWeaponAloneFitsWithOneHandFree() {
+        assertThat(Hands.used("Sword", false, false, true)).isEqualTo(2);
+        assertThat(Hands.free("Sword", false, false, true)).isEqualTo(0);
+        assertThat(Hands.fits("Sword", false, false, true)).isTrue();
+    }
+
+    @Test
+    void offHandWeaponPlusShieldExceedsTwoHands() {
+        assertThat(Hands.used("Sword", true, false, true)).isEqualTo(3);
+        assertThat(Hands.free("Sword", true, false, true)).isEqualTo(0);
+        assertThat(Hands.fits("Sword", true, false, true)).isFalse();
+    }
+
+    @Test
+    void offHandWeaponPlusTwoHandedMainWeaponExceedsTwoHands() {
+        assertThat(Hands.used("Long bow", false, false, true)).isEqualTo(3);
+        assertThat(Hands.fits("Long bow", false, false, true)).isFalse();
+    }
 }

@@ -136,12 +136,17 @@ public class AutodelveService {
             // If nobody in the party (PC or retainers — e.g. an all-Fighter roster) has a free hand to
             // carry the torch, this delve would otherwise retreat in darkness on step one, forever,
             // with no visible cause. Simulate the sensible call a cautious player would make: the PC
-            // drops their own shield rather than soft-locking every future delve.
-            boolean anyoneHasAFreeHand = Hands.free(c.getMainWeapon(), c.isShield(), false) >= 1
+            // drops their shield, then their off-hand weapon if still needed, rather than soft-locking
+            // every future delve.
+            boolean anyoneHasAFreeHand = Hands.free(c.getMainWeapon(), c.isShield(), false, c.getOffHandWeapon() != null) >= 1
                     || save.livingRetainers().stream()
                             .anyMatch(r -> Hands.free(r.getMainWeapon(), r.isShield(), false) >= 1);
             if (!anyoneHasAFreeHand && c.isShield()) {
                 c.setShield(false);
+                anyoneHasAFreeHand = Hands.free(c.getMainWeapon(), false, false, c.getOffHandWeapon() != null) >= 1;
+            }
+            if (!anyoneHasAFreeHand && c.getOffHandWeapon() != null) {
+                c.setOffHandWeapon(null);
             }
             exploration.enter(save);
 

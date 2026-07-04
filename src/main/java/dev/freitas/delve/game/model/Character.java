@@ -35,6 +35,11 @@ public class Character implements Combatant, Advanceable {
     private String mainWeapon = "Weapon";
     private DamageRoll mainWeaponDamage = new DamageRoll(1, 6);
 
+    /** A second one-handed weapon in the off hand — grants +1 to attack (never itself, no separate
+        damage roll: the house rule is a flat to-hit bonus, not an extra attack). Mutually exclusive
+        with a shield by the ordinary two-hands budget ({@link dev.freitas.delve.game.engine.Hands}). */
+    private String offHandWeapon;
+
     private int gold;
 
     /** Torches carried for lighting the way; consumed as they burn out underground. */
@@ -104,6 +109,26 @@ public class Character implements Combatant, Advanceable {
 
     public void setMainWeaponDamage(DamageRoll mainWeaponDamage) {
         this.mainWeaponDamage = mainWeaponDamage;
+    }
+
+    public String getOffHandWeapon() {
+        return offHandWeapon;
+    }
+
+    /** No hands-budget check here — this is a plain POJO setter (Jackson deserializes saves by calling
+        setters directly, in whatever order fields appear in the JSON, so cross-field validation here
+        would be order-dependent and fragile). Callers that offer this as a player action (currently only
+        {@code WieldCommand}) are responsible for validating against {@link dev.freitas.delve.game.engine.Hands}
+        first. */
+    public void setOffHandWeapon(String offHandWeapon) {
+        this.offHandWeapon = offHandWeapon;
+    }
+
+    /** Sheet/party-listing note for the off-hand weapon, or {@code null} if none is wielded — the single
+        source of truth for this text so {@code CharacterSheets} and {@code PartySummary} can't drift. */
+    @JsonIgnore
+    public String offHandDescription() {
+        return offHandWeapon == null ? null : " + " + offHandWeapon + " off hand (+1 to attack)";
     }
 
     /** XP needed to reach the next level (only level 2 is known until Milestone 7). */

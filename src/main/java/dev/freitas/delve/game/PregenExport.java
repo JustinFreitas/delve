@@ -46,6 +46,9 @@ public final class PregenExport {
 
         root.put("weapon", c.getMainWeapon());
         root.put("weaponDamage", c.getMainWeaponDamage().toString());
+        if (c.getOffHandWeapon() != null) {
+            root.put("offHandWeapon", c.getOffHandWeapon());
+        }
         root.put("armor", c.getArmor().displayName());
         root.put("shield", c.isShield());
         boolean heavy = Encumbrance.heavyLoad(c.getGold());

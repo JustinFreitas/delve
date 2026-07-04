@@ -22,4 +22,18 @@ public final class Hands {
     public static boolean fits(String weaponName, boolean shield, boolean holdingLight) {
         return used(weaponName, shield, holdingLight) <= TOTAL;
     }
+
+    /** As the 3-arg version, but with a one-handed off-hand weapon (two-weapon fighting) costing one
+        more hand. */
+    public static int used(String weaponName, boolean shield, boolean holdingLight, boolean offHand) {
+        return used(weaponName, shield, holdingLight) + (offHand ? 1 : 0);
+    }
+
+    public static int free(String weaponName, boolean shield, boolean holdingLight, boolean offHand) {
+        return Math.max(0, TOTAL - used(weaponName, shield, holdingLight, offHand));
+    }
+
+    public static boolean fits(String weaponName, boolean shield, boolean holdingLight, boolean offHand) {
+        return used(weaponName, shield, holdingLight, offHand) <= TOTAL;
+    }
 }

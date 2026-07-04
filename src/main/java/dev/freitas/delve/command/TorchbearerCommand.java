@@ -67,7 +67,7 @@ public class TorchbearerCommand extends Command {
         StringBuilder sb = new StringBuilder("**Torchbearer**: ");
         sb.append(bearer == null ? "no one" : (SaveGame.PLAYER_SLOT.equals(bearer) ? "you" : bearer)).append("\n```\n");
         sb.append(String.format("%-16s %d/2 hands free%n", pc.getName() + " (you)",
-                Hands.free(pc.getMainWeapon(), pc.isShield(), false)));
+                Hands.free(pc.getMainWeapon(), pc.isShield(), false, pc.getOffHandWeapon() != null)));
         for (Retainer r : save.livingRetainers()) {
             sb.append(String.format("%-16s %d/2 hands free%n", r.getName(),
                     Hands.free(r.getMainWeapon(), r.isShield(), false)));

@@ -40,6 +40,9 @@ public final class CharacterSheets {
 
         StringBuilder supplies = new StringBuilder();
         supplies.append("Weapon: ").append(c.getMainWeapon()).append(" (").append(c.getMainWeaponDamage()).append(")");
+        if (c.offHandDescription() != null) {
+            supplies.append(c.offHandDescription());
+        }
         supplies.append("\nTorches: ").append(c.getTorches());
         if (c.getLanterns() > 0 || c.getOilFlasks() > 0) {
             supplies.append("   Lanterns: ").append(c.getLanterns()).append("   Oil flasks: ").append(c.getOilFlasks());
@@ -81,7 +84,11 @@ public final class CharacterSheets {
                 c.getMaxHp(), c.armorClass(), c.ascendingArmorClass(), c.thac0()));
         sb.append(String.format("Saves  D/P %d  Wands %d  Para %d  Breath %d  Spells %d%n",
                 s.deathPoison(), s.wands(), s.paralysisPetrify(), s.breath(), s.spells()));
-        sb.append("Weapon: ").append(c.getMainWeapon()).append(" (").append(c.getMainWeaponDamage()).append(")\n");
+        sb.append("Weapon: ").append(c.getMainWeapon()).append(" (").append(c.getMainWeaponDamage()).append(")");
+        if (c.offHandDescription() != null) {
+            sb.append(c.offHandDescription());
+        }
+        sb.append("\n");
         sb.append("Armor: ").append(c.getArmor().displayName()).append(c.isShield() ? " + shield" : "")
                 .append("   Move ").append(Encumbrance.movementRate(c.getArmor(), heavy)).append("'/turn\n");
         sb.append("Delves: ").append(c.getDelveCount()).append("\n");

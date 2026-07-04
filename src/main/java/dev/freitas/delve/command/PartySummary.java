@@ -59,8 +59,13 @@ public final class PartySummary {
         if (who instanceof Retainer r && r.getSecondaryWeapon() != null) {
             secondary = " (" + r.getSecondaryWeapon().toLowerCase() + " ready)";
         }
-        boolean shield = who instanceof Character c ? c.isShield() : ((Retainer) who).isShield();
-        int handsFree = Hands.free(who.getMainWeapon(), shield, isBearer);
+        Character pc = who instanceof Character c ? c : null;
+        boolean offHandEquipped = pc != null && pc.offHandDescription() != null;
+        if (offHandEquipped) {
+            secondary = pc.offHandDescription();
+        }
+        boolean shield = pc != null ? pc.isShield() : ((Retainer) who).isShield();
+        int handsFree = Hands.free(who.getMainWeapon(), shield, isBearer, offHandEquipped);
         String bearing = isBearer && save.getSession().getActiveLight() != null
                 ? " (bearing " + save.getSession().getActiveLight().displayName() + ")" : "";
         return "rank " + rank + (engaged ? " (engaged)" : "") + ", " + glyph + secondary

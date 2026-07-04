@@ -422,10 +422,12 @@ public class CombatService {
         // double damage — the classic B/X trigger, reusing the existing surprise flags instead of
         // needing a separate flanking/facing concept.
         boolean backstab = attacker.getCharacterClass() == CharacterClass.THIEF && encounter.isMonstersSurprised();
+        // Two-weapon fighting: a flat +1 to attack, no extra attack or damage. PC-only — retainers have
+        // no way to acquire an off-hand weapon.
+        boolean dualWielding = isPlayer && ((Character) attacker).getOffHandWeapon() != null;
+        int toHitModifier = attacker.meleeToHitModifier() + fatiguePenalty + (backstab ? 4 : 0) + (dualWielding ? 1 : 0);
 
-        var outcome = AttackResolver.resolve(dice.d20(),
-                attacker.meleeToHitModifier() + fatiguePenalty + (backstab ? 4 : 0),
-                attacker.thac0(), target.getType().armorClass());
+        var outcome = AttackResolver.resolve(dice.d20(), toHitModifier, attacker.thac0(), target.getType().armorClass());
         if (outcome.hit()) {
             int damage = Math.max(1, damageRoll.roll(dice) + attacker.meleeDamageModifier() + fatiguePenalty);
             if (backstab) {
