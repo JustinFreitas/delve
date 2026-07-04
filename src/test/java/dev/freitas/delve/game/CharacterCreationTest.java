@@ -93,6 +93,27 @@ class CharacterCreationTest {
     }
 
     @Test
+    void createBareSkipsTheFreeStartingKitButStillRollsGoldAndHp() {
+        AbilityScores scores = new AbilityScores(15, 9, 9, 13, 12, 9);
+        Character fighter = factory.createBare("Conan", CharacterClass.FIGHTER, scores);
+
+        assertThat(fighter.getLevel()).isEqualTo(1);
+        assertThat(fighter.getArmor()).isEqualTo(Armor.NONE);
+        assertThat(fighter.isShield()).isFalse();
+        assertThat(fighter.getOffHandWeapon()).isNull();
+        assertThat(fighter.getInventory()).isEmpty();
+        assertThat(fighter.getTorches()).isZero();
+        assertThat(fighter.getGold()).isBetween(30, 180); // still 3d6 x 10, just unspent
+        assertThat(fighter.getMaxHp()).isGreaterThanOrEqualTo(1);
+        assertThat(fighter.getCurrentHp()).isEqualTo(fighter.getMaxHp());
+
+        // The ordinary create(...) path (pregen/roster/NPC tools) is completely unaffected.
+        Character equipped = factory.create("Conan", CharacterClass.FIGHTER, scores);
+        assertThat(equipped.getArmor()).isEqualTo(Armor.CHAIN_MAIL);
+        assertThat(equipped.getInventory()).isNotEmpty();
+    }
+
+    @Test
     void saveGameRoundTripsThroughJackson() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         AbilityScores scores = new AbilityScores(15, 9, 9, 13, 12, 9);

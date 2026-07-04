@@ -202,7 +202,7 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
     with the same party listing `/party` shows (rank, hands, light-bearer status for the PC and every
     retainer) — extracted into a shared `PartySummary` so both commands render it identically.
 
-All milestones are complete (192 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+All milestones are complete (202 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
@@ -211,13 +211,20 @@ for the roadmap.
   (5-tier reaction table, energy drain via a new Wight monster, situational morale modifiers), retainer
   stakes & downtime economy (permadeath on flee, multi-day `/town [days]` rest at 1d3 hp/day, retainer
   starting gold), and character/class fixes (dual-prime-requisite XP averaging, a hit-die reroll floor,
-  Thief backstab, Cleric `/turn` undead). Two more items were picked up afterward from the deferred
+  Thief backstab, Cleric `/turn` undead). Three more items were picked up afterward from the deferred
   backlog below: two-weapon fighting (`/wield offhand <item>`/`unoffhand` grants +1 to melee attack, no
   extra attack/damage — "no shield while dual-wielding" falls out of the existing two-hands budget for
-  free) and evasion/pursuit on `/flee` (the fleeing side auto-escapes if faster than the pursuer, per
+  free), evasion/pursuit on `/flee` (the fleeing side auto-escapes if faster than the pursuer, per
   `Encumbrance`'s existing encounter-movement-rate math vs. `MonsterType.moveRate()` — no new
   movement-rate field needed after all; failing to be faster gets one flat 2-in-6 chance to still shake
-  them, standing in for the rulebook's separate obstacle/dropped-loot/line-of-sight checks).
+  them, standing in for the rulebook's separate obstacle/dropped-loot/line-of-sight checks), and item
+  costs + guided shopping + sell/haggle: a new `GearCatalog` gp price list for weapons/armor/gear;
+  `/roll-character` now creates a bare, unequipped character who spends their rolled gold via the
+  extended `/buy <item>` (weapons/gear to inventory, armor/shield equipped directly) instead of getting
+  a free kit — pregen/roster/NPC generation keep the old instant-equip path untouched; and a new
+  `/sell <item>` sells gear back at 10% of its price plus a haggle bonus (2d6 + CHA modifier, up to
+  +25%). Gems/jewelry (already convert straight to gold at loot time) and scrolls (delve has no physical
+  scroll item) aren't sellable, since neither is modeled as a distinct item.
 
 ### Known gaps (house rules not yet ported)
 
@@ -228,14 +235,24 @@ half-build it:
 - **Combat**: attacking from behind (no flanking/facing concept in `Formation`); evasion's own running-
   exhaustion and obstacle/dropped-loot/line-of-sight sub-rules (see above — folded into one flat roll
   instead of modeled individually).
-- **Economy**: a sell/haggle command (no item-price model exists anywhere), Inn-tier resting costs and
-  generosity-tier hiring, treasure storage, magical research, rune transferring — the last few have
-  nothing to act on since delve has no magic-item system beyond healing potions.
+- **Economy**: Inn-tier resting costs and generosity-tier hiring, treasure storage, magical research,
+  rune transferring — the last three have nothing to act on since delve has no magic-item system beyond
+  healing potions.
 - **Classes**: the custom demihuman classes (Barbarian, Druid, Knight, Warden, Gnome, Half-Orc, Wood
   Elf), expertise-point thief skills beyond Remove Traps (needs lockpicking/stealth subsystems that
   don't exist), alignment/languages (no mechanical hook to attach them to), true coin-weight
   encumbrance (would replace the existing tested `Encumbrance` model wholesale), and the one-level-per-
   session XP cap / alternate reroll-all-HD leveling method.
+
+### Future initiative: multi-PC party support (separate from the above)
+
+Discussed alongside the sell/haggle pass: once starting gear costs real gold, a single new character
+may be too fragile to survive to advance, so a future initiative would support **up to 8 PCs per
+party** with total party size (PCs + retainers + hirelings + mules) **under 18**. The wandering-monster
+penalty above 9 party members is **already implemented** (`ExplorationService.wanderingMonsterTriggered`)
+and already matches this. The rest is a genuine architecture change — `SaveGame` and every command/
+service assume exactly one PC per save today — and deserves its own dedicated planning pass rather than
+being bolted onto a house-rule pass.
 
 ### Seeding a Desert of Desolation party (example)
 ```

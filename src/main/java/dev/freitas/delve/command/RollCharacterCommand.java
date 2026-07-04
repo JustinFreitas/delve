@@ -54,7 +54,7 @@ public class RollCharacterCommand extends Command {
             return;
         }
 
-        Character character = characterFactory.create(name, characterClass, abilities);
+        Character character = characterFactory.createBare(name, characterClass, abilities);
         spells.autoPrepare(character); // a fresh caster is ready to cast (no-op for non-casters)
 
         boolean replaced = ctx.getBeans().gameState.load(ctx.getInvokerUserId()).hasCharacter();
@@ -66,7 +66,10 @@ public class RollCharacterCommand extends Command {
             save.setSession(new GameSession());
         });
 
-        ctx.reply("Rolled up **" + name + "**, a level 1 " + characterClass.displayName() + "!"
+        ctx.reply("Rolled up **" + name + "**, a level 1 " + characterClass.displayName() + "! "
+                + "You start with **" + character.getGold() + " gp** and no gear — head to `"
+                + ctx.getPrefix() + "buy <item>` to kit up (weapon, armor, a shield, torches, and the "
+                + "rest) before your first delve."
                 + (replaced ? " _(your previous character was replaced)_" : ""));
         ctx.replyEmbed(CharacterSheets.embed(character));
     }

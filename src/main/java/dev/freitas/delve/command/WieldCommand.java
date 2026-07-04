@@ -65,14 +65,14 @@ public class WieldCommand extends Command {
         // literally matches the whole argument — an item genuinely named e.g. "Offhand Axe" still wields
         // as a main weapon via the fallback path below, instead of always being misrouted here.
         String[] tokens = name.split("\\s+", 2);
-        boolean offHandSubcommand = tokens[0].equalsIgnoreCase("offhand") && findInventoryItem(character, name) == null;
+        boolean offHandSubcommand = tokens[0].equalsIgnoreCase("offhand") && InventoryMatcher.find(character, name) == null;
         if (offHandSubcommand) {
             String query = tokens.length > 1 ? tokens[1].trim() : "";
             if (query.isBlank()) {
                 ctx.reply("Wield what in your off hand? `wield offhand <item name>`.");
                 return;
             }
-            String match = findInventoryItem(character, query);
+            String match = InventoryMatcher.find(character, query);
             if (match == null) {
                 ctx.reply("You don't have **" + query + "** in your inventory.");
                 return;
@@ -94,7 +94,7 @@ public class WieldCommand extends Command {
             return;
         }
 
-        String match = findInventoryItem(character, name);
+        String match = InventoryMatcher.find(character, name);
         if (match == null) {
             ctx.reply("You don't have **" + name + "** in your inventory.");
             return;
@@ -108,16 +108,6 @@ public class WieldCommand extends Command {
         character.setMainWeaponDamage(WeaponCatalog.damageFor(match));
         ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);
         ctx.reply("You wield **" + match + "**.");
-    }
-
-    /** Case-insensitive substring match against the character's inventory, or {@code null} if none. */
-    private String findInventoryItem(Character character, String name) {
-        for (String item : character.getInventory()) {
-            if (item.toLowerCase().contains(name.toLowerCase())) {
-                return item;
-            }
-        }
-        return null;
     }
 
     private String handsFullMessage(

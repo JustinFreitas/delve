@@ -42,6 +42,23 @@ public class CharacterFactory {
     }
 
     public Character create(String name, CharacterClass characterClass, AbilityScores abilities) {
+        Character c = newCharacter(name, characterClass, abilities);
+        applyEquipmentPackage(c, characterClass);
+        return c;
+    }
+
+    /** As {@link #create}, but skips the free starting-equipment package — inventory stays empty, no
+        armor/shield, {@code mainWeapon} left at {@link Character}'s own bare-fists default — so a real
+        player character spends their rolled gold via {@code /buy} instead ("guided shopping"). Used only
+        by {@code RollCharacterCommand}: pregen/roster/NPC generation still calls {@link #create}, since
+        those tools (and the wider test suite) rely on an instantly fully-equipped character. */
+    public Character createBare(String name, CharacterClass characterClass, AbilityScores abilities) {
+        Character c = newCharacter(name, characterClass, abilities);
+        c.setTorches(0); // no free starting torches either — buy everything, including light
+        return c;
+    }
+
+    private Character newCharacter(String name, CharacterClass characterClass, AbilityScores abilities) {
         Character c = new Character();
         c.setName(name);
         c.setCharacterClass(characterClass);
@@ -54,8 +71,6 @@ public class CharacterFactory {
         c.setCurrentHp(hp);
 
         c.setGold(dice.roll(3, 6) * 10);
-
-        applyEquipmentPackage(c, characterClass);
 
         if (characterClass.isArcaneCaster()) {
             List<String> spellbook = new ArrayList<>();
