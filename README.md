@@ -202,8 +202,34 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
     with the same party listing `/party` shows (rank, hands, light-bearer status for the PC and every
     retainer) — extracted into a shared `PartySummary` so both commands render it identically.
 
-All milestones are complete (164 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+All milestones are complete (186 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
+
+- **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
+  doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps
+  (listening at doors, rest-per-hour fatigue, party-size wandering-monster scaling), combat nuance
+  (5-tier reaction table, energy drain via a new Wight monster, situational morale modifiers), retainer
+  stakes & downtime economy (permadeath on flee, multi-day `/town [days]` rest at 1d3 hp/day, retainer
+  starting gold), and character/class fixes (dual-prime-requisite XP averaging, a hit-die reroll floor,
+  Thief backstab, Cleric `/turn` undead).
+
+### Known gaps (house rules not yet ported)
+
+Each pass above deliberately deferred anything needing a subsystem delve doesn't have, rather than
+half-build it:
+- **Doors**: swing-shut-behind-you, a spike/wedge command, one-way doors — needs new `Exit`/`DoorState`
+  states plus module-authoring support.
+- **Combat**: evasion/pursuit on flee (movement rates, running exhaustion — PCs/retainers have no
+  movement-rate field at all), two-weapon fighting (no dual-wield equipment slot), attacking from behind
+  (no flanking/facing concept in `Formation`).
+- **Economy**: a sell/haggle command (no item-price model exists anywhere), Inn-tier resting costs and
+  generosity-tier hiring, treasure storage, magical research, rune transferring — the last few have
+  nothing to act on since delve has no magic-item system beyond healing potions.
+- **Classes**: the custom demihuman classes (Barbarian, Druid, Knight, Warden, Gnome, Half-Orc, Wood
+  Elf), expertise-point thief skills beyond Remove Traps (needs lockpicking/stealth subsystems that
+  don't exist), alignment/languages (no mechanical hook to attach them to), true coin-weight
+  encumbrance (would replace the existing tested `Encumbrance` model wholesale), and the one-level-per-
+  session XP cap / alternate reroll-all-HD leveling method.
 
 ### Seeding a Desert of Desolation party (example)
 ```
