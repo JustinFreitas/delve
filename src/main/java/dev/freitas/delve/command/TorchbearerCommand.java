@@ -34,40 +34,33 @@ public class TorchbearerCommand extends Command {
             ctx.reply(describeStatus(save));
             return;
         }
-        String token = resolveToken(save, name);
-        if (token == null) {
-            ctx.reply("Don't recognize **" + name + "**. Use `me`/your character's name, or a retainer's "
+        var candidate = save.resolve(name);
+        if (candidate == null) {
+            ctx.reply("Don't recognize **" + name + "**. Use `me`/a character's name, or a retainer's "
                     + "name from `" + ctx.getPrefix() + "party`.");
             return;
         }
+        String token = save.tokenFor(candidate);
         String failure = lighting.assignBearer(save, token);
         if (failure != null) {
             ctx.reply(failure);
             return;
         }
         ctx.getBeans().gameState.save(userId, save);
-        ctx.reply((token.equals(SaveGame.PLAYER_SLOT) ? "You take" : token + " takes") + " up the light.");
-    }
-
-    private String resolveToken(SaveGame save, String token) {
-        if (token.equalsIgnoreCase("me") || token.equalsIgnoreCase(save.getCharacter().getName())) {
-            return SaveGame.PLAYER_SLOT;
-        }
-        for (Retainer r : save.getRetainers()) {
-            if (r.getName().equalsIgnoreCase(token)) {
-                return r.getName();
-            }
-        }
-        return null;
+        ctx.reply((token.equals(SaveGame.PLAYER_SLOT) ? "You take" : candidate.getName() + " takes")
+                + " up the light.");
     }
 
     private String describeStatus(SaveGame save) {
-        Character pc = save.getCharacter();
         String bearer = save.getSession().getLightBearer();
+        boolean solo = save.getCharacters().size() == 1;
         StringBuilder sb = new StringBuilder("**Torchbearer**: ");
         sb.append(bearer == null ? "no one" : (SaveGame.PLAYER_SLOT.equals(bearer) ? "you" : bearer)).append("\n```\n");
-        sb.append(String.format("%-16s %d/2 hands free%n", pc.getName() + " (you)",
-                Hands.free(pc.getMainWeapon(), pc.isShield(), false, pc.getOffHandWeapon() != null)));
+        for (Character c : save.getCharacters()) {
+            String label = solo ? c.getName() + " (you)" : c.getName();
+            sb.append(String.format("%-16s %d/2 hands free%n", label,
+                    Hands.free(c.getMainWeapon(), c.isShield(), false, c.getOffHandWeapon() != null)));
+        }
         for (Retainer r : save.livingRetainers()) {
             sb.append(String.format("%-16s %d/2 hands free%n", r.getName(),
                     Hands.free(r.getMainWeapon(), r.isShield(), false)));

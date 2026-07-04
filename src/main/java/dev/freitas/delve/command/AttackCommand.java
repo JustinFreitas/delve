@@ -2,12 +2,13 @@ package dev.freitas.delve.command;
 
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
+import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.session.CombatService;
 import dev.freitas.delve.game.session.ExplorationResult;
 import org.springframework.stereotype.Component;
 
-/** Strikes in combat (starting the fight if needed): {@code /attack [target number]}. */
+/** Strikes in combat (starting the fight if needed): {@code /attack [pc-name] [target number]}. */
 @Component
 public class AttackCommand extends DungeonCommand {
 
@@ -24,8 +25,19 @@ public class AttackCommand extends DungeonCommand {
         if (save == null) {
             return;
         }
-        Integer target = parseTarget(ctx.getArgumentText());
-        ExplorationResult result = combat.attackRound(save, target);
+        String arg = ctx.getArgumentText().trim();
+
+        // An optional leading PC-name names the acting attacker in a multi-PC party.
+        String actorToken = null;
+        int firstSpace = arg.indexOf(' ');
+        String firstToken = firstSpace > 0 ? arg.substring(0, firstSpace) : arg;
+        if (firstSpace > 0 && save.resolve(firstToken) instanceof Character) {
+            actorToken = firstToken;
+            arg = arg.substring(firstSpace + 1).trim();
+        }
+
+        Integer target = parseTarget(arg);
+        ExplorationResult result = combat.attackRound(save, actorToken, target);
         persist(ctx, save);
         ctx.reply(result.text());
     }
@@ -40,7 +52,9 @@ public class AttackCommand extends DungeonCommand {
 
     @Override
     public void provideHelp(HelpContext help) {
-        help.addUsage("[target number]");
-        help.addDescription("Attacks in combat. Resolves one full round; optionally target enemy #n.");
+        help.addUsage("[pc-name] [target number]");
+        help.addDescription("Attacks in combat. Resolves one full round; optionally target enemy #n. "
+                + "In a multi-PC party, name a PC first to give them the explicit action — every other "
+                + "living PC and retainer still auto-attacks that round.");
     }
 }

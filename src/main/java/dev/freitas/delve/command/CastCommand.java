@@ -4,6 +4,7 @@ import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
 import dev.freitas.delve.game.engine.Spell;
+import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
@@ -11,7 +12,8 @@ import dev.freitas.delve.game.session.ExplorationResult;
 import dev.freitas.delve.game.session.SpellService;
 import org.springframework.stereotype.Component;
 
-/** Casts a prepared spell: {@code /cast <spell> [target]}. Routes to combat or out-of-combat resolution. */
+/** Casts a prepared spell: {@code /cast [pc-name] <spell> [target]}. Routes to combat or out-of-combat
+    resolution. */
 @Component
 public class CastCommand extends Command {
 
@@ -39,6 +41,15 @@ public class CastCommand extends Command {
             return;
         }
 
+        // An optional leading PC-name names the acting caster in a multi-PC party.
+        String actorToken = null;
+        int firstSpace = arg.indexOf(' ');
+        String firstToken = firstSpace > 0 ? arg.substring(0, firstSpace) : arg;
+        if (firstSpace > 0 && save.resolve(firstToken) instanceof Character) {
+            actorToken = firstToken;
+            arg = arg.substring(firstSpace + 1).trim();
+        }
+
         // A trailing number is an optional target index; the rest is the spell name.
         Integer target = null;
         String spellName = arg;
@@ -59,7 +70,7 @@ public class CastCommand extends Command {
         }
 
         ExplorationResult result = save.getSession().getState() == SessionState.IN_COMBAT
-                ? combat.castRound(save, spell, target)
+                ? combat.castRound(save, actorToken, spell, target)
                 : spells.castOutOfCombat(save, spell);
         ctx.getBeans().gameState.save(userId, save);
         ctx.reply(result.text());
@@ -78,8 +89,9 @@ public class CastCommand extends Command {
 
     @Override
     public void provideHelp(HelpContext help) {
-        help.addUsage("<spell> [target]");
+        help.addUsage("[pc-name] <spell> [target]");
         help.addDescription("Casts one of your prepared spells. Damage/sleep spells need a fight; "
-                + "healing and utility spells can be cast any time.");
+                + "healing and utility spells can be cast any time. In a multi-PC party, name a PC first "
+                + "to have them cast — every other living PC and retainer still auto-attacks that round.");
     }
 }

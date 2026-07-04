@@ -202,7 +202,21 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
     with the same party listing `/party` shows (rank, hands, light-bearer status for the PC and every
     retainer) — extracted into a shared `PartySummary` so both commands render it identically.
 
-All milestones are complete (202 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+- **Milestone 13** — multi-PC party support, Phase 1 (foundation, roster, combat): `SaveGame` now holds
+  up to **8 PCs** per save (`characters`, a list) instead of exactly one. `getCharacter()`/`setCharacter()`
+  are kept permanently as the "primary/first PC" accessor — every not-yet-updated command still works
+  unchanged. Old saves' singular `"character"` JSON key still loads correctly (a `@JsonIgnore` getter +
+  `@JsonProperty("character")` setter bridge), so nobody's existing character was at risk; every save
+  upgrades itself to the new `"characters"` shape on its next write. `/roll-character` is now additive —
+  the first roll starts your party as before, every roll after that adds another PC (up to the cap)
+  without disturbing an in-progress delve. `/attack`, `/cast`, and `/turn` all take an optional leading
+  PC name (e.g. `/attack Bram 2`) to give that PC the explicit action for the round; every other living
+  PC and all retainers still auto-attack. Combat only ends in defeat once every living PC is down, not
+  just the first one to fall; XP and treasure shares now split across every living PC plus a half-share
+  per retainer. See [Multi-PC party support](#multi-pc-party-support-phase-1) below for what's still
+  Phase 2+.
+
+All milestones are complete (212 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
@@ -244,15 +258,27 @@ half-build it:
   encumbrance (would replace the existing tested `Encumbrance` model wholesale), and the one-level-per-
   session XP cap / alternate reroll-all-HD leveling method.
 
-### Future initiative: multi-PC party support (separate from the above)
+### Multi-PC party support (Phase 1)
 
 Discussed alongside the sell/haggle pass: once starting gear costs real gold, a single new character
-may be too fragile to survive to advance, so a future initiative would support **up to 8 PCs per
-party** with total party size (PCs + retainers + hirelings + mules) **under 18**. The wandering-monster
-penalty above 9 party members is **already implemented** (`ExplorationService.wanderingMonsterTriggered`)
-and already matches this. The rest is a genuine architecture change — `SaveGame` and every command/
-service assume exactly one PC per save today — and deserves its own dedicated planning pass rather than
-being bolted onto a house-rule pass.
+may be too fragile to survive to advance, so Justin asked for support for **up to 8 PCs per party**
+with total party size (PCs + retainers + hirelings + mules) **under 18**. The wandering-monster penalty
+above 9 party members was **already implemented** (`ExplorationService.wanderingMonsterTriggered`) and
+already matched this. Phase 1 (see Milestone 13 above) shipped the rest of the foundation: the data
+model, roster commands, and full combat integration. Still Phase 2+, deferred deliberately rather than
+half-built:
+- **~10 remaining commands** still act only on the first-rolled PC: `/sheet`, `/wield`, `/quaff`,
+  `/buy`, `/sell`, `/prepare`, `/enter`, `/export`, `/light`. Each needs the same optional-PC-name-
+  argument treatment `/attack` already got.
+- **`/autodelve`** doesn't yet make multi-PC autopilot decisions (whose HP triggers a retreat? who
+  quaffs a potion?) — its simulation loop threads one PC through every decision today.
+- **The web interface** (`GameFacade`/`StateSnapshot`/`app.js`) still only shows/plays the first PC —
+  unaffected by the data-model change, just not updated to expose PC #2+ yet.
+- **Retainer-cap pooling** across multiple PCs' Charisma scores, and switching persisted marching-
+  order/light-bearer tokens from `"@you"` to real PC names once 2+ PCs exist, are both smaller
+  refinements, not blocking.
+- **"Mules"** were mentioned as part of the party-size cap but delve has no such entity modeled at all
+  yet.
 
 ### Seeding a Desert of Desolation party (example)
 ```

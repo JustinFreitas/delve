@@ -20,37 +20,39 @@ import org.springframework.stereotype.Service;
 @Service
 public class LightingService {
 
-    /** Retainers (roster order) first, then the PC — the classic B/X reason hirelings exist: a
-        free-handed hireling carries the torch so the PC's hands stay free for a weapon and shield. */
+    /** Retainers (roster order) first, then each living PC in roster order — the classic B/X reason
+        hirelings exist: a free-handed hireling carries the torch so a PC's hands stay free for a weapon
+        and shield. */
     public String pickEligibleBearer(SaveGame save) {
         for (Retainer r : save.livingRetainers()) {
             if (hasFreeHand(r)) {
                 return r.getName();
             }
         }
-        Character pc = save.getCharacter();
-        if (pc != null && pc.isAlive() && hasFreeHand(pc)) {
-            return SaveGame.PLAYER_SLOT;
+        for (Character c : save.getCharacters()) {
+            if (c.isAlive() && hasFreeHand(c)) {
+                return save.tokenFor(c);
+            }
         }
         return null;
     }
 
     /** Attempts to set the current light bearer; returns null on success, or a reason string on failure. */
     public String assignBearer(SaveGame save, String token) {
-        Combatant candidate = resolve(save, token);
+        Combatant candidate = save.resolve(token);
         if (candidate == null || !candidate.isAlive()) {
             return "No living party member matches that.";
         }
         if (!hasFreeHand(candidate)) {
             return displayName(candidate) + "'s hands are already full.";
         }
-        save.getSession().setLightBearer(token);
+        save.getSession().setLightBearer(save.tokenFor(candidate));
         return null;
     }
 
-    /** Lights a fresh unit of the given source: consumes one unit of fuel, (re)assigns a bearer if
-        none is currently eligible, and reports the outcome either way. Used by a fresh delve's first
-        torch and by {@code /light}. */
+    /** Lights a fresh unit of the given source: consumes one unit of fuel (drawn from the party's shared
+        supply, tracked on the primary PC), (re)assigns a bearer if none is currently eligible, and reports
+        the outcome either way. Used by a fresh delve's first torch and by {@code /light}. */
     public boolean lightUp(SaveGame save, LightSource type, ExplorationResult result) {
         Character pc = save.getCharacter();
         if (!hasFuel(pc, type)) {
@@ -61,7 +63,7 @@ public class LightingService {
         }
         GameSession session = save.getSession();
         String bearer = session.getLightBearer();
-        Combatant current = resolve(save, bearer);
+        Combatant current = save.resolve(bearer);
         if (current == null || !current.isAlive() || !hasFreeHand(current)) {
             bearer = pickEligibleBearer(save);
         }
@@ -89,7 +91,7 @@ public class LightingService {
             return;
         }
         String token = session.getLightBearer();
-        Combatant current = resolve(save, token);
+        Combatant current = save.resolve(token);
         if (current != null && current.isAlive()) {
             return;
         }
@@ -100,7 +102,7 @@ public class LightingService {
             session.setInDarkness(true);
             result.add("No one has a free hand for the light anymore — darkness falls!");
         } else if (token != null) {
-            result.add(displayName(resolve(save, replacement)) + " takes up the light.");
+            result.add(displayName(save.resolve(replacement)) + " takes up the light.");
         }
     }
 
@@ -154,27 +156,12 @@ public class LightingService {
         return false;
     }
 
-    private Combatant resolve(SaveGame save, String token) {
-        if (token == null) {
-            return null;
-        }
-        if (SaveGame.PLAYER_SLOT.equalsIgnoreCase(token)) {
-            return save.getCharacter();
-        }
-        for (Retainer r : save.getRetainers()) {
-            if (r.getName().equalsIgnoreCase(token)) {
-                return r;
-            }
-        }
-        return null;
-    }
-
     private String displayName(Combatant c) {
         return c instanceof Character ? "You" : c.getName();
     }
 
     private String bearerVerb(SaveGame save, String token) {
-        Combatant c = resolve(save, token);
+        Combatant c = save.resolve(token);
         return c instanceof Character ? "You light" : c.getName() + " lights";
     }
 }

@@ -18,18 +18,24 @@ public final class PartySummary {
     private PartySummary() {}
 
     public static String text(SaveGame save) {
-        Character pc = save.getCharacter();
-        int max = RetainerRules.maxRetainers(pc.getAbilities().score(Ability.CHA));
+        // CHA cap keys off the first-rolled PC for now — a real multi-PC pooling rule is a separate
+        // design question, deferred.
+        int max = RetainerRules.maxRetainers(save.getCharacter().getAbilities().score(Ability.CHA));
         int width = save.getSession().isInDungeon() ? save.getSession().currentRoom().getCorridorWidth() : 3;
         List<Combatant> fullOrder = save.fullOrder();
+        boolean solo = save.getCharacters().size() == 1;
 
         String bearerToken = save.getSession().getLightBearer();
 
         StringBuilder sb = new StringBuilder("**Your party**\n```\n");
-        sb.append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  %s%n",
-                pc.getName() + " (you)", pc.getLevel(), pc.getCharacterClass().displayName(),
-                pc.getCurrentHp(), pc.getMaxHp(), pc.armorClass(),
-                rankSummary(fullOrder, width, pc, SaveGame.PLAYER_SLOT.equals(bearerToken), save)));
+        for (Character pc : save.getCharacters()) {
+            boolean isBearer = bearerToken != null && bearerToken.equalsIgnoreCase(save.tokenFor(pc));
+            String label = solo ? pc.getName() + " (you)" : pc.getName();
+            sb.append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  %s%n",
+                    label, pc.getLevel(), pc.getCharacterClass().displayName(),
+                    pc.getCurrentHp(), pc.getMaxHp(), pc.armorClass(),
+                    rankSummary(fullOrder, width, pc, isBearer, save)));
+        }
         for (Retainer r : save.getRetainers()) {
             sb.append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  loyalty %d (%s)  %s%n",
                     r.getName(), r.getLevel(), r.getCharacterClass().displayName(),

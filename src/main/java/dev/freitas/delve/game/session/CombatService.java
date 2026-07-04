@@ -141,28 +141,63 @@ public class CombatService {
         return profile.weaponClass() == WeaponClass.MISSILE ? profile : null;
     }
 
-    /** Resolves one round of combat; starts the fight first if the player initiated it. */
+    /** Resolves one round of combat; starts the fight first if the player initiated it. Defaults to the
+        primary PC as the acting character — see {@link #attackRound(SaveGame, String, Integer, boolean)}. */
     public ExplorationResult attackRound(SaveGame save, Integer targetIndex) {
-        return attackRound(save, targetIndex, false);
+        return attackRound(save, null, targetIndex, false);
     }
 
     /** As {@link #attackRound(SaveGame, Integer)}, but with {@code verbose} showing the raw XP/prime-
         requisite breakdown behind a victory's award (used by {@code /autodelve}'s verbose log detail). */
     public ExplorationResult attackRound(SaveGame save, Integer targetIndex, boolean verbose) {
+        return attackRound(save, null, targetIndex, verbose);
+    }
+
+    /** As {@link #attackRound(SaveGame, Integer)}, but with an explicit acting PC (for multi-PC parties;
+        {@code null} defaults to the primary PC). Every other living PC and all retainers still auto-attack
+        this round via {@link #partyAttacks}. */
+    public ExplorationResult attackRound(SaveGame save, String actorToken, Integer targetIndex) {
+        return attackRound(save, actorToken, targetIndex, false);
+    }
+
+    /** As above, with the verbose XP flag. */
+    public ExplorationResult attackRound(SaveGame save, String actorToken, Integer targetIndex, boolean verbose) {
+        Character actor = resolveActor(save, actorToken);
+        if (actor == null) {
+            return ExplorationResult.failure("Don't recognize that character.");
+        }
         GameSession session = save.getSession();
         if (session.getState() != SessionState.IN_COMBAT) {
             if (session.currentRoom().hasLiveMonster()) {
-                return continueRound(save, targetIndex, startCombat(save), verbose);
+                return continueRound(save, actor, targetIndex, startCombat(save), verbose);
             }
             return ExplorationResult.failure("There is nothing here to attack.");
         }
-        return continueRound(save, targetIndex, new ExplorationResult(), verbose);
+        return continueRound(save, actor, targetIndex, new ExplorationResult(), verbose);
     }
 
-    /** Casts a combat spell as the player's action for one round (starting the fight if needed). */
+    /** Resolves {@code actorToken} to the acting PC ({@code null} means the primary PC); also returns
+        {@code null} if the token doesn't name a living Character (e.g. it names a retainer instead). */
+    private Character resolveActor(SaveGame save, String actorToken) {
+        if (actorToken == null) {
+            return save.getCharacter();
+        }
+        Combatant resolved = save.resolve(actorToken);
+        return resolved instanceof Character c ? c : null;
+    }
+
+    /** Casts a combat spell as the acting PC's action for one round (starting the fight if needed). */
     public ExplorationResult castRound(SaveGame save, Spell spell, Integer targetIndex) {
-        Character character = save.getCharacter();
-        if (!spells.isMemorized(character, spell)) {
+        return castRound(save, null, spell, targetIndex);
+    }
+
+    /** As above, with an explicit acting PC ({@code null} defaults to the primary PC). */
+    public ExplorationResult castRound(SaveGame save, String actorToken, Spell spell, Integer targetIndex) {
+        Character actor = resolveActor(save, actorToken);
+        if (actor == null) {
+            return ExplorationResult.failure("Don't recognize that character.");
+        }
+        if (!spells.isMemorized(actor, spell)) {
             return ExplorationResult.failure("You don't have **" + spell.displayName() + "** prepared.");
         }
         GameSession session = save.getSession();
@@ -172,18 +207,26 @@ public class CombatService {
         ExplorationResult result =
                 session.getState() != SessionState.IN_COMBAT ? startCombat(save) : new ExplorationResult();
         return resolveRound(save, result, () -> {
-            applyPlayerSpell(save, spell, targetIndex, result);
-            retainersAttack(save, result);
+            applyPlayerSpell(save, actor, spell, targetIndex, result);
+            othersAttack(save, actor, result);
         }, false);
     }
 
-    /** Attempts to turn an undead encounter as the Cleric's action for the round (starting the fight if
+    /** Attempts to turn an undead encounter as a Cleric PC's action for the round (starting the fight if
         needed). Cleric-only — retainer Clerics don't turn undead in this pass. Encounters are always a
         single monster type per room, so a successful turn breaks the whole group's morale at once via
         the existing broken-morale -> {@link #victory} flow. */
     public ExplorationResult turnRound(SaveGame save) {
-        Character character = save.getCharacter();
-        if (character.getCharacterClass() != CharacterClass.CLERIC) {
+        return turnRound(save, null);
+    }
+
+    /** As above, with an explicit acting PC ({@code null} defaults to the primary PC). */
+    public ExplorationResult turnRound(SaveGame save, String actorToken) {
+        Character actor = resolveActor(save, actorToken);
+        if (actor == null) {
+            return ExplorationResult.failure("Don't recognize that character.");
+        }
+        if (actor.getCharacterClass() != CharacterClass.CLERIC) {
             return ExplorationResult.failure("Only a Cleric can turn undead.");
         }
         GameSession session = save.getSession();
@@ -202,31 +245,32 @@ public class CombatService {
         }
         ExplorationResult result = alreadyFighting ? new ExplorationResult() : startCombat(save);
         return resolveRound(save, result, () -> {
-            applyTurnUndead(save, session.getCombat(), result);
-            retainersAttack(save, result);
+            applyTurnUndead(save, actor, session.getCombat(), result);
+            othersAttack(save, actor, result);
         }, false);
     }
 
     /** Rolls 2d6 + 2x(cleric level - undead Hit Dice) vs. a flat target of 9. */
-    private void applyTurnUndead(SaveGame save, CombatEncounter encounter, ExplorationResult result) {
-        Character character = save.getCharacter();
+    private void applyTurnUndead(SaveGame save, Character actor, CombatEncounter encounter, ExplorationResult result) {
         MonsterType type = encounter.aliveMonsters().get(0).getType();
-        int roll = dice.roll2d6() + 2 * (character.getLevel() - type.hitDiceCount());
+        int roll = dice.roll2d6() + 2 * (actor.getLevel() - type.hitDiceCount());
+        boolean secondPerson = save.getCharacters().size() == 1;
         if (roll >= 9) {
             encounter.setMoraleBroken(true);
-            result.add("You turn the undead — they flee in terror!");
+            result.add((secondPerson ? "You turn" : actor.getName() + " turns") + " the undead — they flee in terror!");
         } else {
-            result.add("Your holy symbol flares, but the dead do not flee.");
+            result.add((secondPerson ? "Your" : actor.getName() + "'s") + " holy symbol flares, but the dead do not flee.");
         }
     }
 
-    private ExplorationResult continueRound(SaveGame save, Integer targetIndex, ExplorationResult result, boolean verbose) {
-        return resolveRound(save, result, () -> partyAttacks(save, targetIndex, result), verbose);
+    private ExplorationResult continueRound(SaveGame save, Character actor, Integer targetIndex, ExplorationResult result, boolean verbose) {
+        return resolveRound(save, result, () -> partyAttacks(save, actor, targetIndex, result), verbose);
     }
 
-    /** Runs one round given the player's chosen action, with side initiative and the aftermath checks. */
+    /** Runs one round given the player's chosen action, with side initiative and the aftermath checks.
+        Defeat is whole-party (no living PC remains), not any single PC falling — critical for multi-PC
+        parties, where the first PC to fall must not end the delve while others still stand. */
     private ExplorationResult resolveRound(SaveGame save, ExplorationResult result, Runnable playerAction, boolean verbose) {
-        Character character = save.getCharacter();
         CombatEncounter encounter = save.getSession().getCombat();
         encounter.setRound(encounter.getRound() + 1);
         result.add("__Round " + encounter.getRound() + "__");
@@ -250,7 +294,7 @@ public class CombatService {
             if (monstersActEligible && encounter.isMelee()) {
                 monstersAttackParty(save, result);
             }
-            if (character.isAlive() && !encounter.aliveMonsters().isEmpty() && partyActs) {
+            if (!save.livingCharacters().isEmpty() && !encounter.aliveMonsters().isEmpty() && partyActs) {
                 playerAction.run();
             }
         }
@@ -258,7 +302,7 @@ public class CombatService {
         encounter.setPartySurprised(false);
         encounter.setMonstersSurprised(false);
 
-        if (!character.isAlive()) {
+        if (save.livingCharacters().isEmpty()) {
             return defeat(save, result);
         }
         loyaltyChecks(save, result);
@@ -284,8 +328,22 @@ public class CombatService {
                 : "*They close to " + encounter.getDistanceFeet() + " ft.*");
     }
 
-    private void partyAttacks(SaveGame save, Integer targetIndex, ExplorationResult result) {
-        act(save, save.getCharacter(), targetIndex, result);
+    private void partyAttacks(SaveGame save, Character actor, Integer targetIndex, ExplorationResult result) {
+        if (actor.isAlive()) {
+            act(save, actor, targetIndex, result);
+        }
+        othersAttack(save, actor, result);
+    }
+
+    /** Every living PC other than {@code actingPc}, plus all retainers, auto-attacks — used both for the
+        non-acting PCs during a normal attack round and for the whole rest of the party when the acting PC
+        takes a special action instead (a spell, turning undead). */
+    private void othersAttack(SaveGame save, Character actingPc, ExplorationResult result) {
+        for (Character other : save.getCharacters()) {
+            if (other != actingPc && other.isAlive()) {
+                act(save, other, null, result);
+            }
+        }
         retainersAttack(save, result);
     }
 
@@ -313,24 +371,25 @@ public class CombatService {
         boolean engaged = Formation.isEngaged(fullOrder, width, attacker);
         WeaponProfile profile = WeaponCatalog.classify(attacker.getMainWeapon());
         boolean isPlayer = attacker instanceof Character;
-        String name = isPlayer ? "You" : attacker.getName();
+        boolean solo = save.getCharacters().size() == 1;
+        String name = isPlayer && solo ? "You" : attacker.getName();
         int fatiguePenalty = save.getSession().isFatigued() ? -1 : 0;
 
         if (encounter.isMelee()) {
             boolean canMelee = engaged || (rank == 2 && profile.weaponClass() == WeaponClass.REACH);
             if (canMelee) {
-                meleeAttack(attacker, profile, encounter, targetIndex, fatiguePenalty, result);
+                meleeAttack(save, attacker, profile, encounter, targetIndex, fatiguePenalty, result);
             } else {
                 result.add(name + " can't reach the fight from the " + rankLabel(rank) + " rank.");
             }
         } else if (rank >= 2 && profile.weaponClass() == WeaponClass.MISSILE) {
-            missileAttack(attacker, profile, attacker.getMainWeaponDamage(), encounter, targetIndex,
+            missileAttack(save, attacker, profile, attacker.getMainWeaponDamage(), encounter, targetIndex,
                     fatiguePenalty, result);
         } else if (rank >= 2 && secondaryMissileProfile(attacker) != null) {
             // A melee-equipped retainer still carries a missile backup (e.g. a sling) — use it
             // pre-melee instead of standing idle.
             Retainer r = (Retainer) attacker;
-            missileAttack(attacker, secondaryMissileProfile(attacker), r.getSecondaryWeaponDamage(),
+            missileAttack(save, attacker, secondaryMissileProfile(attacker), r.getSecondaryWeaponDamage(),
                     encounter, targetIndex, fatiguePenalty, result);
         } else if (rank == 1) {
             result.add(name + " waits, weapon ready, for them to close.");
@@ -348,11 +407,12 @@ public class CombatService {
         };
     }
 
-    /** Applies the player's spell: a damaging bolt, a sleep effect, or in-combat healing. */
-    private void applyPlayerSpell(SaveGame save, Spell spell, Integer targetIndex, ExplorationResult result) {
-        Character character = save.getCharacter();
+    /** Applies the acting PC's spell: a damaging bolt, a sleep effect, or in-combat healing. */
+    private void applyPlayerSpell(SaveGame save, Character actor, Spell spell, Integer targetIndex, ExplorationResult result) {
         CombatEncounter encounter = save.getSession().getCombat();
-        spells.consume(character, spell);
+        boolean secondPerson = save.getCharacters().size() == 1;
+        String who = secondPerson ? "You" : actor.getName();
+        spells.consume(actor, spell);
         switch (spell.effect()) {
             case DAMAGE -> {
                 List<Monster> alive = encounter.aliveMonsters();
@@ -364,7 +424,8 @@ public class CombatService {
                 Monster target = alive.get(index);
                 int damage = SpellService.MAGIC_MISSILE_DAMAGE.roll(dice);
                 target.takeDamage(damage);
-                result.add("You loose **" + spell.displayName() + "** at the " + target.getType().name().toLowerCase()
+                result.add(who + " " + (secondPerson ? "loose" : "looses") + " **" + spell.displayName()
+                        + "** at the " + target.getType().name().toLowerCase()
                         + " for " + damage + " automatic damage"
                         + (target.isAlive() ? " (" + target.getCurrentHp() + " hp left)." : " — it is destroyed!"));
             }
@@ -381,17 +442,18 @@ public class CombatService {
                         slept++;
                     }
                 }
-                result.add("You cast **Sleep** — " + slept + " enemy" + (slept == 1 ? "" : " enemies")
+                result.add(who + " " + (secondPerson ? "cast" : "casts") + " **Sleep** — " + slept
+                        + " enemy" + (slept == 1 ? "" : " enemies")
                         + " collapse" + (slept == 1 ? "s" : "") + " into helpless slumber.");
             }
             case HEAL -> {
                 int healed = SpellService.CURE_LIGHT_WOUNDS.roll(dice);
-                int before = character.getCurrentHp();
-                character.setCurrentHp(Math.min(character.getMaxHp(), character.getCurrentHp() + healed));
-                result.add("You cast **" + spell.displayName() + "**, recovering "
-                        + (character.getCurrentHp() - before) + " hp.");
+                int before = actor.getCurrentHp();
+                actor.setCurrentHp(Math.min(actor.getMaxHp(), actor.getCurrentHp() + healed));
+                result.add(who + " " + (secondPerson ? "cast" : "casts") + " **" + spell.displayName()
+                        + "**, recovering " + (actor.getCurrentHp() - before) + " hp.");
             }
-            default -> result.add("You cast **" + spell.displayName() + "**.");
+            default -> result.add(who + " " + (secondPerson ? "cast" : "casts") + " **" + spell.displayName() + "**.");
         }
     }
 
@@ -403,7 +465,7 @@ public class CombatService {
     }
 
     private void meleeAttack(
-            Combatant attacker, WeaponProfile profile, CombatEncounter encounter, Integer targetIndex,
+            SaveGame save, Combatant attacker, WeaponProfile profile, CombatEncounter encounter, Integer targetIndex,
             int fatiguePenalty, ExplorationResult result) {
         List<Monster> alive = encounter.aliveMonsters();
         if (alive.isEmpty()) {
@@ -411,12 +473,13 @@ public class CombatService {
         }
         Monster target = alive.get(resolveTargetIndex(targetIndex, alive.size()));
         boolean isPlayer = attacker instanceof Character;
-        String who = isPlayer ? "You" : attacker.getName();
+        boolean secondPerson = isPlayer && save.getCharacters().size() == 1;
+        String who = secondPerson ? "You" : attacker.getName();
         String name = target.getType().name().toLowerCase();
 
         boolean fallbackDagger = profile.weaponClass() == WeaponClass.MISSILE;
         String weapon = fallbackDagger ? "a dagger"
-                : (isPlayer ? "your " + attacker.getMainWeapon().toLowerCase() : attacker.getMainWeapon().toLowerCase());
+                : (secondPerson ? "your " + attacker.getMainWeapon().toLowerCase() : attacker.getMainWeapon().toLowerCase());
         DamageRoll damageRoll = fallbackDagger ? FALLBACK_DAGGER : attacker.getMainWeaponDamage();
 
         // Backstab: a Thief attacking while the monsters are still flat-footed gets +4 to hit and
@@ -435,31 +498,32 @@ public class CombatService {
                 damage *= 2;
             }
             target.takeDamage(damage);
-            result.add(who + " " + (isPlayer ? "strike" : "strikes") + " the " + name + " with " + weapon
+            result.add(who + " " + (secondPerson ? "strike" : "strikes") + " the " + name + " with " + weapon
                     + " for " + damage + " damage" + (backstab ? " (backstab!)" : "")
                     + (outcome.critical() ? " (critical!)" : "")
                     + (target.isAlive() ? " (" + target.getCurrentHp() + " hp left)." : " — it falls!"));
         } else {
-            result.add(who + " " + (isPlayer ? "swing" : "swings") + " at the " + name + " and "
-                    + (isPlayer ? "miss" : "misses") + (outcome.fumble() ? " badly" : "") + ".");
+            result.add(who + " " + (secondPerson ? "swing" : "swings") + " at the " + name + " and "
+                    + (secondPerson ? "miss" : "misses") + (outcome.fumble() ? " badly" : "") + ".");
         }
     }
 
     private void missileAttack(
-            Combatant attacker, WeaponProfile profile, DamageRoll weaponDamage, CombatEncounter encounter,
+            SaveGame save, Combatant attacker, WeaponProfile profile, DamageRoll weaponDamage, CombatEncounter encounter,
             Integer targetIndex, int fatiguePenalty, ExplorationResult result) {
         List<Monster> alive = encounter.aliveMonsters();
         if (alive.isEmpty()) {
             return;
         }
         boolean isPlayer = attacker instanceof Character;
-        String who = isPlayer ? "You" : attacker.getName();
+        boolean secondPerson = isPlayer && save.getCharacters().size() == 1;
+        String who = secondPerson ? "You" : attacker.getName();
         Monster target = alive.get(resolveTargetIndex(targetIndex, alive.size()));
         String name = target.getType().name().toLowerCase();
 
         RangeBand band = profile.rangeTable().band(encounter.getDistanceFeet());
         if (band == null) {
-            result.add(who + " " + (isPlayer ? "have" : "has") + " no clear shot — the range is too great.");
+            result.add(who + " " + (secondPerson ? "have" : "has") + " no clear shot — the range is too great.");
             return;
         }
         var outcome = AttackResolver.resolve(dice.d20(),
@@ -469,19 +533,19 @@ public class CombatService {
             // No ability-score bonus to missile damage in B/X.
             int damage = Math.max(1, weaponDamage.roll(dice) + fatiguePenalty);
             target.takeDamage(damage);
-            result.add(who + " " + (isPlayer ? "fire" : "fires") + " at the " + name + " for " + damage
+            result.add(who + " " + (secondPerson ? "fire" : "fires") + " at the " + name + " for " + damage
                     + " damage" + (outcome.critical() ? " (critical!)" : "")
                     + (target.isAlive() ? " (" + target.getCurrentHp() + " hp left)." : " — it falls!"));
         } else {
-            result.add(who + " " + (isPlayer ? "fire" : "fires") + " at the " + name + " and "
-                    + (isPlayer ? "miss" : "misses") + ".");
+            result.add(who + " " + (secondPerson ? "fire" : "fires") + " at the " + name + " and "
+                    + (secondPerson ? "miss" : "misses") + ".");
         }
     }
 
     private void monstersAttackParty(SaveGame save, ExplorationResult result) {
-        Character character = save.getCharacter();
         CombatEncounter encounter = save.getSession().getCombat();
         int width = save.getSession().currentRoom().getCorridorWidth();
+        boolean solo = save.getCharacters().size() == 1;
         for (Monster monster : encounter.aliveMonsters()) {
             List<Combatant> targetable = Formation.engagedFront(save.fullOrder(), width);
             if (targetable.isEmpty()) {
@@ -491,10 +555,10 @@ public class CombatService {
             MonsterType type = monster.getType();
             int targetAc = target.armorClass() + polingSurpriseAcPenalty(save, encounter, width, target);
             var outcome = AttackResolver.resolve(dice.d20(), 0, type.thac0(), targetAc);
-            String victim = (target instanceof Character) ? "you" : target.getName();
+            String victim = (target instanceof Character && solo) ? "you" : target.getName();
             if (outcome.hit() && type.effect() == AttackEffect.DRAIN) {
-                applyDrain(target, result);
-                if (target instanceof Character && !character.isAlive()) {
+                applyDrain(save, target, result);
+                if (target instanceof Character && save.livingCharacters().isEmpty()) {
                     return;
                 }
             } else if (outcome.hit()) {
@@ -502,7 +566,7 @@ public class CombatService {
                 target.setCurrentHp(target.getCurrentHp() - damage);
                 result.add("The " + type.name().toLowerCase() + " hits " + victim + " for " + damage + " damage"
                         + (target.isAlive() ? "." : (target instanceof Character ? "." : " — " + target.getName() + " falls!")));
-                if (target instanceof Character && !character.isAlive()) {
+                if (target instanceof Character && save.livingCharacters().isEmpty()) {
                     return;
                 }
             } else {
@@ -516,11 +580,12 @@ public class CombatService {
         alive at level 1 with 2 HP and (if a spellcaster) no prepared spells, "reduced to a shell of
         themself"; failure kills them. Restoring drained levels needs a safe-haven rest and isn't
         modeled yet — drains are permanent for now. */
-    private void applyDrain(Combatant target, ExplorationResult result) {
+    private void applyDrain(SaveGame save, Combatant target, ExplorationResult result) {
         if (!(target instanceof Advanceable adv)) {
             return;
         }
-        String who = (target instanceof Character) ? "You" : adv.getName();
+        boolean secondPerson = target instanceof Character && save.getCharacters().size() == 1;
+        String who = secondPerson ? "You" : adv.getName();
         if (adv.getLevel() > 1) {
             result.add(Leveling.drainLevel(adv, dice));
             return;
@@ -533,13 +598,13 @@ public class CombatService {
             if (target instanceof Character character) {
                 character.getMemorizedSpells().clear();
             }
-            result.add(who + " " + (target instanceof Character ? "barely survive" : "barely survives")
-                    + " the drain, reduced to a shell of " + (target instanceof Character ? "your" : "their")
+            result.add(who + " " + (secondPerson ? "barely survive" : "barely survives")
+                    + " the drain, reduced to a shell of " + (secondPerson ? "your" : "their")
                     + " former self (2 hp, no spells or special abilities).");
         } else {
             adv.setCurrentHp(0);
-            result.add(who + " " + (target instanceof Character ? "fail" : "fails")
-                    + " the saving throw and " + (target instanceof Character ? "die" : "dies")
+            result.add(who + " " + (secondPerson ? "fail" : "fails")
+                    + " the saving throw and " + (secondPerson ? "die" : "dies")
                     + " from the drain!");
         }
     }
@@ -619,7 +684,6 @@ public class CombatService {
 
     private ExplorationResult victory(SaveGame save, ExplorationResult result, boolean verbose) {
         GameSession session = save.getSession();
-        Character character = save.getCharacter();
         CombatEncounter encounter = session.getCombat();
 
         int totalXp = 0;
@@ -639,10 +703,15 @@ public class CombatService {
                 : "**Victory!** The last of them falls.");
 
         if (totalXp > 0) {
+            // Every living PC earns a full share, each retainer a half-share — reduces to today's exact
+            // behavior at 1 PC.
+            List<Character> livingPcs = save.livingCharacters();
             List<Retainer> survivors = save.livingRetainers();
-            int shares = 1 + survivors.size();
+            int shares = livingPcs.size() + survivors.size();
             int perShare = totalXp / shares;
-            result.getLines().addAll(Leveling.awardXp(character, perShare, dice, verbose));
+            for (Character pc : livingPcs) {
+                result.getLines().addAll(Leveling.awardXp(pc, perShare, dice, verbose));
+            }
             for (Retainer retainer : survivors) {
                 // Retainers earn a half-share; surface only their level-ups to keep the log readable.
                 for (String line : Leveling.awardXp(retainer, perShare / 2, dice)) {
@@ -660,8 +729,9 @@ public class CombatService {
         session.setState(SessionState.IN_TOWN);
         session.setCombat(null);
         result.add("");
-        result.add("**" + save.getCharacter().getName() + " has been slain in the dungeon.** "
-                + "Roll a new character to delve again.");
+        result.add(save.getCharacters().size() == 1
+                ? "**" + save.getCharacter().getName() + " has been slain in the dungeon.** Roll a new character to delve again."
+                : "**Your party has been wiped out in the dungeon.** Roll a new character to delve again.");
         return result;
     }
 
@@ -671,14 +741,13 @@ public class CombatService {
         ({@link #loyaltyChecks}) — someone who held steady through the fight just retreats with everyone. */
     public ExplorationResult flee(SaveGame save) {
         GameSession session = save.getSession();
-        Character character = save.getCharacter();
         if (session.getState() != SessionState.IN_COMBAT) {
             return ExplorationResult.failure("You are not in combat.");
         }
         ExplorationResult result = new ExplorationResult();
         result.add("You turn to flee — the enemy lashes out as you go!");
         monstersAttackParty(save, result);
-        if (!character.isAlive()) {
+        if (save.livingCharacters().isEmpty()) {
             return defeat(save, result);
         }
 
@@ -707,7 +776,7 @@ public class CombatService {
         session.setState(SessionState.EXPLORING);
         session.setCombat(null);
 
-        boolean catastrophic = character.getCurrentHp() * 4 <= character.getMaxHp()
+        boolean catastrophic = save.livingCharacters().stream().anyMatch(c -> c.getCurrentHp() * 4 <= c.getMaxHp())
                 || save.getRetainers().stream().anyMatch(r -> r.getCurrentHp() <= 0);
         List<Retainer> deserters = new ArrayList<>();
         if (catastrophic) {
@@ -740,12 +809,12 @@ public class CombatService {
     }
 
     /** The party's group movement rate is the slowest living member's — the classic B/X "the party
-        moves at the pace of its slowest member" rule. */
+        moves at the pace of its slowest member" rule, across every living PC and retainer. */
     private int groupEncounterRate(SaveGame save) {
-        Character character = save.getCharacter();
-        int slowest = character.isAlive()
-                ? Encumbrance.encounterRate(character.getArmor(), Encumbrance.heavyLoad(character.getGold()))
-                : Integer.MAX_VALUE;
+        int slowest = Integer.MAX_VALUE;
+        for (Character c : save.livingCharacters()) {
+            slowest = Math.min(slowest, Encumbrance.encounterRate(c.getArmor(), Encumbrance.heavyLoad(c.getGold())));
+        }
         for (Retainer r : save.livingRetainers()) {
             // Retainers don't track personal gold/heavy-load (see RetainerFactory) — never treated as heavy.
             slowest = Math.min(slowest, Encumbrance.encounterRate(r.getArmor(), false));
@@ -759,6 +828,7 @@ public class CombatService {
         List<List<Combatant>> ranks = Formation.ranks(save.fullOrder(), width);
 
         StringBuilder sb = new StringBuilder();
+        boolean solo = save.getCharacters().size() == 1;
         List<String> rankParts = new ArrayList<>();
         for (int i = 0; i < ranks.size(); i++) {
             List<String> members = new ArrayList<>();
@@ -766,7 +836,7 @@ public class CombatService {
                 if (!c.isAlive()) {
                     continue;
                 }
-                String label = (c instanceof Character) ? "You" : c.getName();
+                String label = (c instanceof Character && solo) ? "You" : c.getName();
                 members.add(label + " " + Math.max(0, c.getCurrentHp()) + "/" + c.getMaxHp());
             }
             if (!members.isEmpty()) {

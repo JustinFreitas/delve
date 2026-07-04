@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.GameSession;
+import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
@@ -15,7 +16,8 @@ import org.springframework.stereotype.Component;
 /**
  * Rolls up a new level-1 B/X character: {@code /roll-character <class> [name]}. Abilities are rolled
  * 3d6 in order; if they fail the chosen class's minimum requirements the roll is rejected (re-run to
- * try again, as in B/X). The finished character is saved, replacing any previous one.
+ * try again, as in B/X). The first roll starts a fresh party; every roll after that adds another PC to
+ * the party (up to {@link SaveGame#MAX_CHARACTERS}) instead of replacing anyone.
  */
 @Component
 public class RollCharacterCommand extends Command {
@@ -54,23 +56,41 @@ public class RollCharacterCommand extends Command {
             return;
         }
 
+        SaveGame existing = ctx.getBeans().gameState.load(ctx.getInvokerUserId());
+        boolean firstPc = !existing.hasCharacter();
+        if (!firstPc && existing.getCharacters().size() >= SaveGame.MAX_CHARACTERS) {
+            ctx.reply("Your party already has the maximum of **" + SaveGame.MAX_CHARACTERS
+                    + "** characters. `dismiss` one first.");
+            return;
+        }
+
         Character character = characterFactory.createBare(name, characterClass, abilities);
         spells.autoPrepare(character); // a fresh caster is ready to cast (no-op for non-casters)
 
-        boolean replaced = ctx.getBeans().gameState.load(ctx.getInvokerUserId()).hasCharacter();
-        // A fresh character starts a fresh dungeon session too — otherwise it can inherit a stale
+        int partySizeAfter = existing.getCharacters().size() + 1;
+        // Only the very first roll starts a fresh dungeon session — otherwise it would blow away an
         // in-progress delve's state (dungeon position, active combat, who's carrying the light, etc.)
-        // from whoever the previous character was.
+        // for a party that's already adventuring.
         ctx.getBeans().gameState.mutate(ctx.getInvokerUserId(), save -> {
-            save.setCharacter(character);
-            save.setSession(new GameSession());
+            if (firstPc) {
+                save.setCharacter(character);
+                save.setSession(new GameSession());
+            } else {
+                save.addCharacter(character);
+            }
         });
 
-        ctx.reply("Rolled up **" + name + "**, a level 1 " + characterClass.displayName() + "! "
-                + "You start with **" + character.getGold() + " gp** and no gear — head to `"
-                + ctx.getPrefix() + "buy <item>` to kit up (weapon, armor, a shield, torches, and the "
-                + "rest) before your first delve."
-                + (replaced ? " _(your previous character was replaced)_" : ""));
+        String reply = firstPc
+                ? "Rolled up **" + name + "**, a level 1 " + characterClass.displayName() + "! "
+                        + "You start with **" + character.getGold() + " gp** and no gear — head to `"
+                        + ctx.getPrefix() + "buy <item>` to kit up (weapon, armor, a shield, torches, and "
+                        + "the rest) before your first delve."
+                : "Rolled up **" + name + "**, a level 1 " + characterClass.displayName()
+                        + ", and added them to the party (" + partySizeAfter + "/" + SaveGame.MAX_CHARACTERS
+                        + "). They start with **" + character.getGold() + " gp** and no gear — gear them up "
+                        + "before their first fight (note: `buy`/`wield` and a few other commands still "
+                        + "act on your first-rolled PC only; naming a specific PC for those is coming soon).";
+        ctx.reply(reply);
         ctx.replyEmbed(CharacterSheets.embed(character));
     }
 
@@ -93,6 +113,8 @@ public class RollCharacterCommand extends Command {
     public void provideHelp(HelpContext help) {
         help.addUsage("<class> [name]");
         help.addDescription("Rolls a new level-1 character of the given B/X class (Cleric, Fighter, "
-                + "Magic-User, Thief, Dwarf, Elf, Halfling). Replaces your current character.");
+                + "Magic-User, Thief, Dwarf, Elf, Halfling). The first roll starts your party; every "
+                + "roll after that adds another PC (up to " + SaveGame.MAX_CHARACTERS + ") instead of "
+                + "replacing anyone.");
     }
 }

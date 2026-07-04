@@ -231,17 +231,18 @@ public class ExplorationService {
     }
 
     /** Adds the room's treasure to the character, with the existing XP-per-gold and potion chance. */
-    /** Loots the room's treasure, split across the party the same way combat XP already is: the PC
-        takes a full share, each living retainer a half-share (matching {@code CombatService.victory()}'s
-        convention) — so the PC's own gold and gp-based XP reflect only their cut, not the whole hoard. */
+    /** Loots the room's treasure, split across the party the same way combat XP already is: every
+        living PC takes a full share, each living retainer a half-share (matching
+        {@code CombatService.victory()}'s convention) — so a PC's own gold and gp-based XP reflect only
+        their cut, not the whole hoard. Searching itself is still a primary-PC-only action in this pass
+        (see {@link #search}), but the split accounts for the whole party. */
     private void loot(SaveGame save, Room room, ExplorationResult result, boolean verbose) {
-        Character character = save.getCharacter();
         room.setLooted(true);
-        
+
         int gemsValue = room.getTreasureGemsValue();
         int jewelryValue = room.getTreasureJewelryValue();
         int totalGold = room.getTreasureGold() + gemsValue + jewelryValue;
-        
+
         StringBuilder treasureFound = new StringBuilder("You find treasure: **").append(room.getTreasureGold()).append(" gp**");
         if (gemsValue > 0) {
             treasureFound.append(", gems worth **").append(gemsValue).append(" gp**");
@@ -252,30 +253,37 @@ public class ExplorationService {
         treasureFound.append("!");
         result.add(treasureFound.toString());
 
+        List<Character> livingPcs = save.livingCharacters();
         List<Retainer> survivors = save.livingRetainers();
-        int shares = 1 + survivors.size();
-        int pcShare = totalGold / shares;
+        int shares = livingPcs.size() + survivors.size();
+        int perShare = totalGold / shares;
 
-        character.setGold(character.getGold() + pcShare);
-        if (!survivors.isEmpty() && pcShare < totalGold) {
-            result.add("Your share: **" + pcShare + " gp** (the rest goes to your retainers' cut).");
+        for (Character pc : livingPcs) {
+            pc.setGold(pc.getGold() + perShare);
+        }
+        if (shares > 1 && perShare < totalGold) {
+            result.add("Each share: **" + perShare + " gp** (split " + shares + " ways).");
         }
         // B/X awards 1 XP per gold piece recovered from the dungeon — the main route to advancement.
         // Each side is credited XP for its own share, not the full haul.
-        if (pcShare > 0) {
-            result.getLines().addAll(Leveling.awardXp(character, pcShare, dice, verbose));
+        if (perShare > 0) {
+            for (Character pc : livingPcs) {
+                result.getLines().addAll(Leveling.awardXp(pc, perShare, dice, verbose));
+            }
         }
         for (Retainer retainer : survivors) {
-            for (String line : Leveling.awardXp(retainer, pcShare / 2, dice)) {
+            for (String line : Leveling.awardXp(retainer, perShare / 2, dice)) {
                 if (line.contains("Level up")) {
                     result.add(line);
                 }
             }
         }
 
-        // A fraction of hoards include a potion of healing among the coin.
+        // A fraction of hoards include a potion of healing among the coin — credited to the primary PC's
+        // inventory for now (no per-PC inventory-choice mechanic yet).
         if (dice.d(4) == 1) {
-            character.setHealingPotions(character.getHealingPotions() + 1);
+            Character primary = save.getCharacter();
+            primary.setHealingPotions(primary.getHealingPotions() + 1);
             result.add("Among the coins is a **potion of healing**! (`quaff` to drink.)");
         }
     }

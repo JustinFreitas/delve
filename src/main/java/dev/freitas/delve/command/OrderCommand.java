@@ -45,22 +45,24 @@ public class OrderCommand extends Command {
         Set<String> seen = new LinkedHashSet<>();
         List<String> unknown = new ArrayList<>();
         for (String token : tokens) {
-            String resolved = resolveToken(save, token);
+            Combatant resolved = save.resolve(token);
             if (resolved == null) {
                 unknown.add(token);
-            } else if (seen.add(resolved)) {
-                newOrder.add(resolved);
+            } else if (seen.add(save.tokenFor(resolved))) {
+                newOrder.add(save.tokenFor(resolved));
             }
         }
         if (!unknown.isEmpty()) {
             ctx.reply("Don't recognize: " + String.join(", ", unknown)
-                    + ". Use `me`/your character's name, or a retainer's name from `" + ctx.getPrefix() + "party`.");
+                    + ". Use `me`/a character's name, or a retainer's name from `" + ctx.getPrefix() + "party`.");
             return;
         }
 
         List<String> unlisted = new ArrayList<>();
-        if (!seen.contains(SaveGame.PLAYER_SLOT)) {
-            unlisted.add(save.getCharacter().getName());
+        for (Character c : save.getCharacters()) {
+            if (!seen.contains(save.tokenFor(c))) {
+                unlisted.add(c.getName());
+            }
         }
         for (Retainer r : save.livingRetainers()) {
             if (!seen.contains(r.getName())) {
@@ -79,30 +81,18 @@ public class OrderCommand extends Command {
         ctx.reply(reply.toString());
     }
 
-    /** Resolves "me"/the character's own name to the reserved player slot, else a retainer's stored name. */
-    private String resolveToken(SaveGame save, String token) {
-        if (token.equalsIgnoreCase("me") || token.equalsIgnoreCase(save.getCharacter().getName())) {
-            return SaveGame.PLAYER_SLOT;
-        }
-        for (Retainer r : save.getRetainers()) {
-            if (r.getName().equalsIgnoreCase(token)) {
-                return r.getName();
-            }
-        }
-        return null;
-    }
-
     private String describeOrder(SaveGame save) {
         int width = save.getSession().isInDungeon() ? save.getSession().currentRoom().getCorridorWidth() : 2;
         List<List<Combatant>> ranks = Formation.ranks(save.fullOrder(), width);
         if (ranks.isEmpty()) {
             return "Your marching order is empty.";
         }
+        boolean solo = save.getCharacters().size() == 1;
         StringBuilder sb = new StringBuilder("**Marching order** (width " + width + ")\n");
         for (int i = 0; i < ranks.size(); i++) {
             List<String> names = new ArrayList<>();
             for (Combatant c : ranks.get(i)) {
-                names.add(c instanceof Character ? "You" : c.getName());
+                names.add(c instanceof Character && solo ? "You" : c.getName());
             }
             sb.append(i == 0 ? "Front" : "Rank " + (i + 1)).append(": ").append(String.join(", ", names)).append("\n");
         }
