@@ -76,12 +76,12 @@ class HireCommandTest {
         List<Retainer> hired = command.bulkHire(save, pc, HireCommand.BulkMode.RANDOM, null, 5);
 
         // Regression-locked against seed 11: the class roll, name-pool roll, banked-gold roll, and the
-        // hit-die roll inside retainerFactory.create(...) all interleave on the same Dice, so this exact
-        // sequence is only reproducible by re-running the real bulkHire path (not by hand-simulating the
-        // rolls).
+        // (reroll-floored) hit-die roll inside retainerFactory.create(...) all interleave on the same
+        // Dice, so this exact sequence is only reproducible by re-running the real bulkHire path (not by
+        // hand-simulating the rolls).
         assertThat(hired.stream().map(Retainer::getCharacterClass).collect(Collectors.toList()))
-                .containsExactly(CharacterClass.FIGHTER, CharacterClass.HALFLING, CharacterClass.CLERIC,
-                        CharacterClass.ELF, CharacterClass.HALFLING);
+                .containsExactly(CharacterClass.FIGHTER, CharacterClass.ELF, CharacterClass.MAGIC_USER,
+                        CharacterClass.DWARF, CharacterClass.FIGHTER);
     }
 
     @Test

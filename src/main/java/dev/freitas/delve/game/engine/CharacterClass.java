@@ -86,20 +86,23 @@ public enum CharacterClass {
     }
 
     /**
-     * The B/X prime-requisite XP adjustment, based on the primary prime requisite score:
-     * 3-5 -20%, 6-8 -10%, 9-12 0, 13-15 +5%, 16-18 +10%. For the two dual-prime-requisite classes
-     * (Elf, Halfling) the primary (first-listed) requisite is used; the exact dual-requisite rules
-     * are refined alongside full advancement (Milestone 7).
+     * The B/X prime-requisite XP adjustment: 3-5 -20%, 6-8 -10%, 9-12 0, 13-15 +5%, 16-18 +10%. For the
+     * two dual-prime-requisite classes (Elf, Halfling) the average of both requisites' scores (rounded
+     * down) is used, per the B/X dual-requisite rule; single-PR classes trivially average to themselves.
      */
     public int xpBonusPercent(AbilityScores scores) {
-        int primary = scores.score(primeRequisites.get(0));
-        if (primary <= 5) {
+        int sum = 0;
+        for (Ability a : primeRequisites) {
+            sum += scores.score(a);
+        }
+        int average = sum / primeRequisites.size();
+        if (average <= 5) {
             return -20;
-        } else if (primary <= 8) {
+        } else if (average <= 8) {
             return -10;
-        } else if (primary <= 12) {
+        } else if (average <= 12) {
             return 0;
-        } else if (primary <= 15) {
+        } else if (average <= 15) {
             return 5;
         } else {
             return 10;

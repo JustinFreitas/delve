@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.Leveling;
 import dev.freitas.delve.game.model.Retainer;
 import org.springframework.stereotype.Component;
 
@@ -29,7 +30,7 @@ public class RetainerFactory {
 
         int hp = 0;
         for (int i = 0; i < r.getLevel(); i++) {
-            hp += Math.max(1, dice.d(characterClass.hitDie()) + r.getAbilities().modifier(Ability.CON));
+            hp += Math.max(1, Leveling.rollHitDie(dice, characterClass.hitDie()) + r.getAbilities().modifier(Ability.CON));
         }
         r.setMaxHp(Math.max(1, hp));
         r.setCurrentHp(r.getMaxHp());

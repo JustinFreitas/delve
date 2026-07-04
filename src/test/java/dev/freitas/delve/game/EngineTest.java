@@ -2,6 +2,7 @@ package dev.freitas.delve.game;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.Advancement;
 import dev.freitas.delve.game.engine.AttackResolver;
 import dev.freitas.delve.game.engine.CharacterClass;
@@ -97,6 +98,22 @@ class EngineTest {
         assertThat(Advancement.adjustedAward(1000, 10)).isEqualTo(1100);
         assertThat(Advancement.adjustedAward(1000, 5)).isEqualTo(1050);
         assertThat(Advancement.adjustedAward(1000, -20)).isEqualTo(800);
+    }
+
+    @Test
+    void dualPrimeRequisiteXpBonusAveragesBothScores() {
+        // Elf's prime requisites are INT, STR (in that order) — INT alone would land in the 16-18
+        // (+10%) band, but averaged with a middling STR the result should land in the 9-12 (0%) band.
+        AbilityScores mixed = new AbilityScores(6, 16, 9, 9, 9, 9); // STR 6, INT 16 -> average 11
+        assertThat(CharacterClass.ELF.xpBonusPercent(mixed)).isEqualTo(0);
+
+        // Both requisites high should still land in the top band.
+        AbilityScores strong = new AbilityScores(17, 17, 9, 9, 9, 9);
+        assertThat(CharacterClass.ELF.xpBonusPercent(strong)).isEqualTo(10);
+
+        // A single-PR class (Fighter: STR only) is unaffected by the averaging change.
+        AbilityScores fighterScores = new AbilityScores(16, 9, 9, 9, 9, 9);
+        assertThat(CharacterClass.FIGHTER.xpBonusPercent(fighterScores)).isEqualTo(10);
     }
 
     // --- Saving throws -----------------------------------------------------

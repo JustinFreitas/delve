@@ -40,6 +40,23 @@ class LevelingTest {
         assertThat(messages.get(0)).isEqualTo("Gained **25 XP** (23 × 110%, total 25).");
     }
 
+    @Test
+    void rollHitDieNeverReturnsLessThanThree() {
+        for (int i = 0; i < 500; i++) {
+            int roll = Leveling.rollHitDie(dice, 8);
+            assertThat(roll).isBetween(3, 8);
+        }
+    }
+
+    @Test
+    void rollHitDieCanStillReturnEveryValueThreeAndUp() {
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
+        for (int i = 0; i < 500; i++) {
+            seen.add(Leveling.rollHitDie(dice, 8));
+        }
+        assertThat(seen).containsExactlyInAnyOrder(3, 4, 5, 6, 7, 8);
+    }
+
     private Character fighterWithStr(int str) {
         Character c = new Character();
         c.setName("Tester");

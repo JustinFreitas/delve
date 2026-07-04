@@ -4,6 +4,7 @@ import dev.freitas.delve.game.Bestiary;
 import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.Advanceable;
 import dev.freitas.delve.game.engine.AttackResolver;
+import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Dice;
@@ -173,6 +174,49 @@ public class CombatService {
             applyPlayerSpell(save, spell, targetIndex, result);
             retainersAttack(save, result);
         }, false);
+    }
+
+    /** Attempts to turn an undead encounter as the Cleric's action for the round (starting the fight if
+        needed). Cleric-only — retainer Clerics don't turn undead in this pass. Encounters are always a
+        single monster type per room, so a successful turn breaks the whole group's morale at once via
+        the existing broken-morale -> {@link #victory} flow. */
+    public ExplorationResult turnRound(SaveGame save) {
+        Character character = save.getCharacter();
+        if (character.getCharacterClass() != CharacterClass.CLERIC) {
+            return ExplorationResult.failure("Only a Cleric can turn undead.");
+        }
+        GameSession session = save.getSession();
+        boolean alreadyFighting = session.getState() == SessionState.IN_COMBAT;
+        MonsterType type;
+        if (alreadyFighting) {
+            List<Monster> alive = session.getCombat().aliveMonsters();
+            type = alive.isEmpty() ? null : alive.get(0).getType();
+        } else if (session.currentRoom().hasLiveMonster()) {
+            type = Bestiary.byName(session.currentRoom().getMonsterName());
+        } else {
+            type = null;
+        }
+        if (type == null || !isUndead(type)) {
+            return ExplorationResult.failure("There's nothing undead here to turn.");
+        }
+        ExplorationResult result = alreadyFighting ? new ExplorationResult() : startCombat(save);
+        return resolveRound(save, result, () -> {
+            applyTurnUndead(save, session.getCombat(), result);
+            retainersAttack(save, result);
+        }, false);
+    }
+
+    /** Rolls 2d6 + 2x(cleric level - undead Hit Dice) vs. a flat target of 9. */
+    private void applyTurnUndead(SaveGame save, CombatEncounter encounter, ExplorationResult result) {
+        Character character = save.getCharacter();
+        MonsterType type = encounter.aliveMonsters().get(0).getType();
+        int roll = dice.roll2d6() + 2 * (character.getLevel() - type.hitDiceCount());
+        if (roll >= 9) {
+            encounter.setMoraleBroken(true);
+            result.add("You turn the undead — they flee in terror!");
+        } else {
+            result.add("Your holy symbol flares, but the dead do not flee.");
+        }
     }
 
     private ExplorationResult continueRound(SaveGame save, Integer targetIndex, ExplorationResult result, boolean verbose) {
@@ -374,13 +418,23 @@ public class CombatService {
                 : (isPlayer ? "your " + attacker.getMainWeapon().toLowerCase() : attacker.getMainWeapon().toLowerCase());
         DamageRoll damageRoll = fallbackDagger ? FALLBACK_DAGGER : attacker.getMainWeaponDamage();
 
-        var outcome = AttackResolver.resolve(dice.d20(), attacker.meleeToHitModifier() + fatiguePenalty,
+        // Backstab: a Thief attacking while the monsters are still flat-footed gets +4 to hit and
+        // double damage — the classic B/X trigger, reusing the existing surprise flags instead of
+        // needing a separate flanking/facing concept.
+        boolean backstab = attacker.getCharacterClass() == CharacterClass.THIEF && encounter.isMonstersSurprised();
+
+        var outcome = AttackResolver.resolve(dice.d20(),
+                attacker.meleeToHitModifier() + fatiguePenalty + (backstab ? 4 : 0),
                 attacker.thac0(), target.getType().armorClass());
         if (outcome.hit()) {
             int damage = Math.max(1, damageRoll.roll(dice) + attacker.meleeDamageModifier() + fatiguePenalty);
+            if (backstab) {
+                damage *= 2;
+            }
             target.takeDamage(damage);
             result.add(who + " " + (isPlayer ? "strike" : "strikes") + " the " + name + " with " + weapon
-                    + " for " + damage + " damage" + (outcome.critical() ? " (critical!)" : "")
+                    + " for " + damage + " damage" + (backstab ? " (backstab!)" : "")
+                    + (outcome.critical() ? " (critical!)" : "")
                     + (target.isAlive() ? " (" + target.getCurrentHp() + " hp left)." : " — it falls!"));
         } else {
             result.add(who + " " + (isPlayer ? "swing" : "swings") + " at the " + name + " and "

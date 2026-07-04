@@ -90,12 +90,23 @@ public final class Leveling {
     private static int hitPointGain(Advanceable c, Dice dice) {
         CharacterClass cls = c.getCharacterClass();
         if (c.getLevel() <= 9) {
-            return Math.max(1, dice.d(cls.hitDie()) + c.getAbilities().modifier(Ability.CON));
+            return Math.max(1, rollHitDie(dice, cls.hitDie()) + c.getAbilities().modifier(Ability.CON));
         }
         // Post-name-level: fixed hit points, no CON bonus (fighters/dwarves gain more).
         return switch (cls) {
             case FIGHTER, DWARF, ELF, HALFLING -> 2;
             default -> 1;
         };
+    }
+
+    /** Rerolls a hit-die result of 1 or 2 until it lands on 3+ ("no wimpy hit points") — used whenever a
+        character *gains* hit points. Deliberately not used for {@link #drainLevel}'s HP-loss roll, where
+        rerolling low results would invert the house rule's intent. */
+    public static int rollHitDie(Dice dice, int sides) {
+        int roll;
+        do {
+            roll = dice.d(sides);
+        } while (roll < 3);
+        return roll;
     }
 }

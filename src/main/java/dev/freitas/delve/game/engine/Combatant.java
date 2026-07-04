@@ -29,4 +29,6 @@ public interface Combatant {
     String getMainWeapon();
 
     boolean isAlive();
+
+    CharacterClass getCharacterClass();
 }

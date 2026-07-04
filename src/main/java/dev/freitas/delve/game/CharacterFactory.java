@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.Leveling;
 import dev.freitas.delve.game.model.Character;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,7 +49,7 @@ public class CharacterFactory {
         c.setXp(0);
         c.setAbilities(abilities);
 
-        int hp = Math.max(1, dice.d(characterClass.hitDie()) + abilities.modifier(Ability.CON));
+        int hp = Math.max(1, Leveling.rollHitDie(dice, characterClass.hitDie()) + abilities.modifier(Ability.CON));
         c.setMaxHp(hp);
         c.setCurrentHp(hp);
 
