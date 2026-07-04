@@ -13,7 +13,22 @@ public class CombatEncounter {
     private int round;
     private boolean moraleBroken;
 
+    // Morale is edge-triggered (B/X: first casualty, then half-or-fewer remaining), each rolled once.
+    private boolean firstCasualtyChecked;
+    private boolean halfLossChecked;
+
+    // Surprise (rolled once, at the start of the fight) and the abstract engagement range that closes
+    // toward melee over subsequent rounds.
+    private boolean partySurprised;
+    private boolean monstersSurprised;
+    private int distanceFeet;
+
     public CombatEncounter() {}
+
+    @JsonIgnore
+    public boolean isMelee() {
+        return distanceFeet <= 0;
+    }
 
     @JsonIgnore
     public List<Monster> aliveMonsters() {
@@ -69,5 +84,45 @@ public class CombatEncounter {
 
     public void setMoraleBroken(boolean moraleBroken) {
         this.moraleBroken = moraleBroken;
+    }
+
+    public boolean isFirstCasualtyChecked() {
+        return firstCasualtyChecked;
+    }
+
+    public void setFirstCasualtyChecked(boolean firstCasualtyChecked) {
+        this.firstCasualtyChecked = firstCasualtyChecked;
+    }
+
+    public boolean isHalfLossChecked() {
+        return halfLossChecked;
+    }
+
+    public void setHalfLossChecked(boolean halfLossChecked) {
+        this.halfLossChecked = halfLossChecked;
+    }
+
+    public boolean isPartySurprised() {
+        return partySurprised;
+    }
+
+    public void setPartySurprised(boolean partySurprised) {
+        this.partySurprised = partySurprised;
+    }
+
+    public boolean isMonstersSurprised() {
+        return monstersSurprised;
+    }
+
+    public void setMonstersSurprised(boolean monstersSurprised) {
+        this.monstersSurprised = monstersSurprised;
+    }
+
+    public int getDistanceFeet() {
+        return distanceFeet;
+    }
+
+    public void setDistanceFeet(int distanceFeet) {
+        this.distanceFeet = Math.max(0, distanceFeet);
     }
 }

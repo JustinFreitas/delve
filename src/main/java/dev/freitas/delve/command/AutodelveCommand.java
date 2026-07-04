@@ -5,17 +5,21 @@ import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.session.AutodelveService;
+import java.nio.charset.StandardCharsets;
 import org.springframework.stereotype.Component;
 
 /**
- * Fast-forwards the invoker's character to a target level by simulating delves:
- * {@code /autodelve [level]} (default 5). The character earns its levels through real (simulated)
- * combat and can die. The result is persisted, so a survivor can be exported for the table.
+ * Runs simulated delves for the invoker's character: {@code /autodelve [level]}. A target at or below
+ * the character's current level (the default, with no argument) runs a single delve; a higher target
+ * fast-forwards through repeated delves until it's reached. The character earns its levels through
+ * real (simulated) combat and can die. The result is persisted, so a survivor can be exported for the
+ * table.
  */
 @Component
 public class AutodelveCommand extends Command {
 
-    private static final int DEFAULT_LEVEL = 5;
+    // A Discord message caps at 2000 chars; leave headroom for the outcome line and code fence.
+    private static final int INLINE_LOG_LIMIT = 1600;
 
     private final AutodelveService autodelve;
 
@@ -38,9 +42,11 @@ public class AutodelveCommand extends Command {
             return;
         }
 
-        // Args: "<level> [fast|bx]" — level defaults to 5, pace defaults to by-the-book B/X OSE.
-        int target = DEFAULT_LEVEL;
+        // Args: "<level> [fast|bx] [verbose|milestones]" — level defaults to the character's current
+        // level (a single delve), pace defaults to by-the-book B/X OSE, log detail to verbose.
+        int target = save.getCharacter().getLevel();
         AutodelveService.Pace pace = AutodelveService.Pace.BX_OSE;
+        AutodelveService.LogDetail detail = AutodelveService.LogDetail.VERBOSE;
         for (String token : ctx.getArgumentText().trim().toLowerCase().split("\\s+")) {
             if (token.isBlank()) {
                 continue;
@@ -49,11 +55,16 @@ public class AutodelveCommand extends Command {
                 pace = AutodelveService.Pace.FAST;
             } else if (token.equals("bx") || token.equals("ose")) {
                 pace = AutodelveService.Pace.BX_OSE;
+            } else if (token.equals("verbose") || token.equals("full") || token.equals("detailed")) {
+                detail = AutodelveService.LogDetail.VERBOSE;
+            } else if (token.equals("milestones") || token.equals("summary")) {
+                detail = AutodelveService.LogDetail.MILESTONES;
             } else {
                 try {
                     target = Integer.parseInt(token);
                 } catch (NumberFormatException e) {
-                    ctx.reply("Usage: `" + ctx.getPrefix() + "autodelve [level] [fast|bx]` (default: level 5, B/X OSE pace).");
+                    ctx.reply("Usage: `" + ctx.getPrefix() + "autodelve [level] [fast|bx] [verbose|milestones]` "
+                            + "(default: your current level, i.e. one delve; B/X OSE pace; verbose log).");
                     return;
                 }
             }
@@ -62,16 +73,11 @@ public class AutodelveCommand extends Command {
             ctx.reply("Target level must be between 1 and 14.");
             return;
         }
-        if (save.getCharacter().getLevel() >= target) {
-            ctx.reply(save.getCharacter().getName() + " is already level " + save.getCharacter().getLevel() + ".");
-            return;
-        }
 
-        AutodelveService.Result result = autodelve.run(save, target, pace);
+        AutodelveService.Result result = autodelve.run(save, target, pace, detail);
         ctx.getBeans().gameState.save(userId, save);
 
-        StringBuilder sb = new StringBuilder();
-        sb.append(switch (result.outcome()) {
+        String outcomeLine = switch (result.outcome()) {
             case REACHED_TARGET -> "**" + save.getCharacter().getName() + "** clawed up from level "
                     + result.startLevel() + " to **level " + result.finalLevel() + "** over "
                     + result.episodes() + " delves.";
@@ -80,23 +86,36 @@ public class AutodelveCommand extends Command {
             case EXHAUSTED -> "After " + result.episodes() + " delves, **" + save.getCharacter().getName()
                     + "** reached level " + result.finalLevel() + " (" + result.finalXp()
                     + " XP). Run `" + ctx.getPrefix() + "autodelve " + target + "` again to push further.";
-        });
-        if (!result.log().isEmpty()) {
-            sb.append("\n```\n");
-            result.log().forEach(line -> sb.append(line).append('\n'));
-            sb.append("```");
+            case SINGLE_DELVE -> "**" + save.getCharacter().getName() + "** delved and returned to town at level "
+                    + result.finalLevel() + " (" + result.finalXp() + " XP, " + save.getCharacter().getGold() + " gp).";
+        };
+
+        String logText = String.join("\n", result.log());
+        if (logText.length() > INLINE_LOG_LIMIT) {
+            // Too long for a single Discord message (common in verbose mode) — send the log as a file.
+            ctx.reply(outcomeLine);
+            ctx.replyFile(save.getCharacter().getName() + "-delve-log.txt",
+                    logText.getBytes(StandardCharsets.UTF_8), null);
+        } else if (!logText.isEmpty()) {
+            ctx.reply(outcomeLine + "\n```\n" + logText + "\n```");
+        } else {
+            ctx.reply(outcomeLine);
         }
-        ctx.reply(sb.toString());
         if (save.getCharacter().isAlive()) {
             ctx.replyEmbed(CharacterSheets.embed(save.getCharacter()));
+            ctx.reply(PartySummary.text(save));
         }
     }
 
     @Override
     public void provideHelp(HelpContext help) {
-        help.addUsage("[level] [fast|bx]");
-        help.addDescription("Simulates delves to level your character up to the target level (default 5). "
-                + "Default pace is by-the-book B/X OSE (slow, authentic); add `fast` for roughly one "
-                + "level every 3-4 delves. The character earns its levels and can die.");
+        help.addUsage("[level] [fast|bx] [verbose|milestones]");
+        help.addDescription("Simulates delves for your character. A target at or below your current level "
+                + "(the default, with no argument) runs a single delve; a higher target fast-forwards "
+                + "through repeated delves until reached. Default pace is by-the-book B/X OSE (slow, "
+                + "authentic); add `fast` for roughly one level every 3-4 delves. Log detail defaults to "
+                + "`verbose` (every action's full narration, every turn — sent as a file if long); "
+                + "`milestones` reports only curated significant events instead. Shows your party "
+                + "afterward. The character earns its levels and can die.");
     }
 }

@@ -29,6 +29,10 @@ public class Retainer implements Combatant, Advanceable {
     private boolean shield;
     private String mainWeapon = "Weapon";
     private DamageRoll mainWeaponDamage = new DamageRoll(1, 6);
+    // A carried missile weapon the retainer isn't currently wielding as mainWeapon (null if none fits
+    // the class) — lets a melee-equipped retainer still fire from rank 2+ before melee closes.
+    private String secondaryWeapon;
+    private DamageRoll secondaryWeaponDamage;
 
     private int loyalty = 7;
     private boolean fled;
@@ -49,6 +53,13 @@ public class Retainer implements Combatant, Advanceable {
     @JsonIgnore
     public int meleeToHitModifier() {
         return abilities.modifier(Ability.STR);
+    }
+
+    /** Missile to-hit modifier: DEX modifier. */
+    @Override
+    @JsonIgnore
+    public int missileToHitModifier() {
+        return abilities.modifier(Ability.DEX);
     }
 
     @Override
@@ -149,6 +160,22 @@ public class Retainer implements Combatant, Advanceable {
 
     public void setMainWeaponDamage(DamageRoll mainWeaponDamage) {
         this.mainWeaponDamage = mainWeaponDamage;
+    }
+
+    public String getSecondaryWeapon() {
+        return secondaryWeapon;
+    }
+
+    public void setSecondaryWeapon(String secondaryWeapon) {
+        this.secondaryWeapon = secondaryWeapon;
+    }
+
+    public DamageRoll getSecondaryWeaponDamage() {
+        return secondaryWeaponDamage;
+    }
+
+    public void setSecondaryWeaponDamage(DamageRoll secondaryWeaponDamage) {
+        this.secondaryWeaponDamage = secondaryWeaponDamage;
     }
 
     public int getLoyalty() {

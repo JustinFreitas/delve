@@ -91,6 +91,43 @@ class CombatTest {
     }
 
     @Test
+    void fatiguePenaltyReducesHeroDamageOutput() {
+        // Paired trials: a fatigued hero (turnsSinceRest >= 6) should deal less total damage in one
+        // round of attacks than a fresh hero, since -1 applies to both the to-hit roll and damage.
+        int fatiguedTotal = 0;
+        int freshTotal = 0;
+        for (long seed = 1; seed <= 200; seed++) {
+            fatiguedTotal += heroDamageInOneRound(seed, true);
+            freshTotal += heroDamageInOneRound(seed, false);
+        }
+        assertThat(fatiguedTotal).isLessThan(freshTotal);
+    }
+
+    /** One fresh 1-on-1 fight (Hero vs. a Bugbear, so it's unlikely to die from a single hit), returning
+        how much damage the hero's single attack this round dealt. */
+    private int heroDamageInOneRound(long seed, boolean fatigued) {
+        Dice localDice = new Dice(new Random(seed));
+        CombatService localCombat = new CombatService(localDice, new SpellService(localDice));
+        Character hero = new CharacterFactory(localDice)
+                .create("Hero", CharacterClass.FIGHTER, new AbilityScores(16, 9, 9, 13, 13, 12));
+        hero.setMaxHp(200);
+        hero.setCurrentHp(200);
+        SaveGame save = combatSave(Bestiary.BUGBEAR, 1, 200);
+        save.setCharacter(hero);
+        if (fatigued) {
+            save.getSession().setTurnsSinceRest(6);
+        }
+
+        localCombat.startCombat(save);
+        int hpBefore = save.getSession().getCombat().getMonsters().get(0).getCurrentHp();
+        localCombat.attackRound(save, null);
+        if (save.getSession().getState() == SessionState.IN_COMBAT) {
+            return hpBefore - save.getSession().getCombat().getMonsters().get(0).getCurrentHp();
+        }
+        return hpBefore; // the monster died this round -> its full remaining hp was dealt
+    }
+
+    @Test
     void awardingXpLevelsTheCharacterUp() {
         Character fighter = factory.create("Conan", CharacterClass.FIGHTER, new AbilityScores(12, 9, 9, 12, 12, 9));
         int hpBefore = fighter.getMaxHp();

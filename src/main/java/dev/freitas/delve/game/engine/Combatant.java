@@ -19,9 +19,14 @@ public interface Combatant {
 
     int meleeToHitModifier();
 
+    /** Missile to-hit modifier (DEX modifier in B/X). */
+    int missileToHitModifier();
+
     int meleeDamageModifier();
 
     DamageRoll getMainWeaponDamage();
+
+    String getMainWeapon();
 
     boolean isAlive();
 }

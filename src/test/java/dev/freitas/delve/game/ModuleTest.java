@@ -18,6 +18,7 @@ import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
+import dev.freitas.delve.game.session.LightingService;
 import dev.freitas.delve.game.session.ExplorationService;
 import dev.freitas.delve.game.session.SpellService;
 import java.util.ArrayDeque;
@@ -65,6 +66,17 @@ class ModuleTest {
         assertThat(level.room(4).getContent()).isEqualTo(ContentType.SPECIAL);
         assertThat(level.room(4).getTreasureGold()).isEqualTo(200);
 
+        // Migration safety: this module predates M12 and carries none of its new fields — every room
+        // and exit must default exactly as if width/trap/treasureTrap/disposition had never existed.
+        for (Room room : level.getRooms().values()) {
+            assertThat(room.getCorridorWidth()).isEqualTo(2);
+            assertThat(room.getScriptedDisposition()).isNull();
+            assertThat(room.isTreasureTrapped()).isFalse();
+            for (Exit exit : room.getExits().values()) {
+                assertThat(exit.isTrapped()).isFalse();
+            }
+        }
+
         // Room 2 keyed an exit north->4, but room 4 keyed none back: the loader adds the return path.
         Exit backToTwo = level.room(4).getExits().get(Direction.SOUTH);
         assertThat(backToTwo).isNotNull();
@@ -79,7 +91,7 @@ class ModuleTest {
         Dice dice = new Dice(new Random(7));
         SpellService spells = new SpellService(dice);
         CombatService combat = new CombatService(dice, spells);
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), combat);
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService());
 
         SaveGame save = new SaveGame();
         Character hero = new CharacterFactory(dice)

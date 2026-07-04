@@ -98,7 +98,10 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   auto-levels the character (HP gain), defeat ends the delve.
 - **Milestone 6** — retainers & hirelings: `/hire` `/party` `/dismiss`. Charisma caps the roster and
   sets loyalty; retainers fight alongside the PC (shared `Combatant`/`Advanceable` contracts), take
-  hits, earn half-shares of XP, run a loyalty check when bloodied, and may desert in a rout.
+  hits, earn half-shares of XP, run a loyalty check when bloodied, and may permanently desert on
+  `/flee` — but only after a genuinely bad fight (the PC bloodied, or a companion already down this
+  delve), and only retainers who'd already broken and sat out from being bloodied themselves; anyone
+  who held steady through the fight just retreats with the party, no roll.
 - **Milestone 7** — full B/X depth: spells (`/cast`, `/prepare`) with the B/X slot tables, Magic
   Missile / Sleep / Cure Light Wounds; `/quaff` healing potions; encumbrance & movement rates on the
   sheet; richer treasure (potions in hoards); authored set-pieces stamped into generated levels
@@ -139,7 +142,67 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   Discord-id allowlist, forwarded-headers for TLS) included; the web app stays Anthropic-key-free.
   See [Web interface](#web-interface).
 
-All milestones are complete (66 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+- **Milestone 12** — combat, formation & exploration overhaul:
+  - **Marching order & ranked combat** — `/order` sets a party formation (front to back); corridor/room
+    width (1-3 abreast, Gygax75-style) caps how many stand in a rank. Monsters can only strike the
+    front-most living occupant of each file (`Formation`); a fallen or unfilled file exposes the next
+    occupant behind it, independent of neighboring files. Reach weapons melee from rank 2 past a living
+    rank-1 file-mate; missile weapons (`WeaponCatalog`, `/wield`) fire from rank 2+ with real B/X
+    Short/Medium/Long range bands, closing each round at the monster's move rate.
+  - **Surprise** (2-in-6 each side) and abstract engagement range on combat start; the front rank can
+    `/pole` ahead for passive trap detection, at the cost of an AC penalty if surprised while poling.
+  - **Reaction rolls** keep their existing 2d6+CHA roll for unscripted encounters, but authored modules
+    can now script a fixed `HOSTILE`/`NEUTRAL`/`FRIENDLY` disposition that overrides it.
+  - **Monster morale** is now edge-triggered (checked once on the first casualty, once more at half
+    losses) instead of re-rolling every round after any loss.
+  - **Corridor traps and treasure traps** extend the existing room-trap model: passages can be trapped
+    and sprung on traversal, and treasure can be independently trapped, requiring a disarm attempt
+    (`ThiefSkills.removeTraps`, a Thief-exclusive scaling chance; everyone else a flat low fallback) —
+    giving the Thief class real mechanical identity. Dwarves and Elves gain a passive sense (automatic,
+    no `/search` needed) for room/corridor traps and secret doors respectively, reusing their existing
+    active-search bonuses.
+  - **Progression tuning** — the character sheet now tracks total delves (manual or autodelve); dungeon
+    treasure chance and value are bumped a notch above strict by-the-book odds (gold recovery is the
+    main XP lever, and it was landing too slowly); treasure found is split PC/retainers the same way
+    combat XP already is (a full share to the PC, a half-share per living retainer), so the PC's own
+    gold/XP reflects their cut, not the whole hoard; and `/autodelve`'s milestone log now reports every
+    engaged encounter and its outcome, not just the notable ones.
+  - **Bulk hiring & toughness-based default order** — `/hire <class> all` / `/hire smart all` (also just
+    `/hire all`, the default) / `/hire random all` fills every retainer slot you can afford in one
+    command (single class, a front-loaded tankiest-first mix, or a uniform random mix). The default
+    marching order now ranks the whole party — retainers *and* the PC — by measured toughness (AC
+    ascending, then max HP descending, via the shared `Toughness` comparator) rather than always
+    tacking the PC on last, so a heavily armored Fighter/Dwarf PC defaults toward the front and a
+    Magic-User PC still defaults toward the back; `/order` still overrides this explicitly.
+  - **Melee + missile starting kits** — every PC and retainer class gets a cheap missile backup
+    alongside its melee weapon wherever B/X class fiction allows (a sling for most, matching the
+    existing Elf short bow / Halfling sling) — only the dagger-only Magic-User is excluded. For the
+    PC this just means the sling is in inventory for `/wield`; retainers (who have no `/wield`) now
+    carry a `secondaryWeapon` and automatically loose it from rank 2+ before melee closes, instead of
+    standing idle with a sword no one can swing yet.
+  - **Two hands, and someone has to carry the light** — every combatant has two hands (`Hands`): a
+    two-handed weapon, a shield, and physically holding the party's lit torch/lantern each cost one, so
+    a sword-and-board Fighter adventuring alone has none left for their own torch — the classic B/X
+    reason hirelings exist. `/light [torch|lantern]` lights (or checks the status of) the shared light
+    source — a torch is cheap and burns 6 turns per unit, a lantern costs more but burns 24 turns per
+    flask of oil; `/buy <torch|lantern|oil> [qty]` restocks both in town. The party auto-picks a
+    free-handed retainer over the PC when nobody's carrying it, `/torchbearer [name]` reassigns it by
+    hand, and `/wield shield`/`/wield unshield` adjusts your own shield — all rejected outright if it
+    would leave nobody's hands free for what they're holding. `/autodelve` accounts for this too: if the
+    whole rolled party would otherwise have no free hand for a torch (e.g. an all-Fighter roster), it
+    has the PC drop their shield before descending rather than silently retreating in darkness on turn
+    one, every delve, forever. Rolling a fresh character (`/roll-character`) also now starts a clean
+    dungeon session instead of inheriting a previous character's in-progress delve/light state.
+  - **`/autodelve`'s verbose log explains its XP math** — `LogDetail.VERBOSE` now shows the raw award
+    and the prime-requisite percentage behind every XP line (e.g. `Gained 20 XP (23 × 90%, total 20).`),
+    since the terse total alone (after a party gold-share split and a class's STR/INT/etc. adjustment)
+    can look like a miscalculation. `MILESTONES` mode is unchanged — it never showed individual XP lines.
+  - **`/autodelve` defaults to verbose, and shows the party afterward** — `verbose` is now the default
+    log detail (pass `milestones` for the old curated-summary behavior instead), and every run now ends
+    with the same party listing `/party` shows (rank, hands, light-bearer status for the PC and every
+    retainer) — extracted into a shared `PartySummary` so both commands render it identically.
+
+All milestones are complete (164 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 ### Seeding a Desert of Desolation party (example)
@@ -170,16 +233,22 @@ for the roadmap.
 | `/open <dir>` | Open or force a door. |
 | `/attack [n]` | Strike in combat (one round); optionally target enemy #n. |
 | `/flee` | Flee combat to an adjacent room. |
-| `/hire <class> [name]` | Recruit a retainer in town. |
-| `/party` | List your character and retainers. |
+| `/hire <class> [name]` | Recruit a retainer in town, or bulk-hire with `<class> all` / `smart all` / `all` / `random all`. |
+| `/party` | List your character and retainers (rank, engagement, weapon class). |
 | `/dismiss <name>` | Release a retainer. |
+| `/order [name1 name2 ...]` | View or set your marching order (front to back). |
+| `/wield <item name>` | Wield a recognized inventory item as your main weapon; `wield shield`/`wield unshield` adjusts your shield. |
+| `/pole [on\|off]` | Toggle probing ahead with a 10-foot pole (passive trap sense; AC risk if surprised). |
+| `/light [torch\|lantern]` | View the party's light status, or light a fresh torch/lantern. |
+| `/torchbearer [name]` | View or reassign who's carrying the party's lit torch/lantern. |
+| `/buy <torch\|lantern\|oil> [qty]` | Buy light supplies in town. |
 | `/cast <spell> [target]` | Cast a prepared spell (combat or utility). |
 | `/prepare <spell>` | Memorize a spell into a free slot. |
 | `/quaff` | Drink a potion of healing. |
 | `/town` | Return to town: rest, heal, pay upkeep, re-prepare spells. |
 | `/pregen <class> [level] [name]` | Instantly build a finished character at a level (default 5). |
 | `/export [embed\|text\|json]` | Export your character (embed, stat block, or JSON file). |
-| `/autodelve [level] [fast\|bx]` | Fast-forward your character via simulated delves (default B/X OSE pace). |
+| `/autodelve [level] [fast\|bx] [verbose\|milestones]` | Fast-forward your character via simulated delves (default B/X OSE pace, verbose log); shows the party afterward. |
 | `/roster <count> <level> [class]` | DM: mint a party of pregens (+ JSON file). |
 | `/npc <class> <level> [name]` | DM: generate a single named NPC (+ JSON file). |
 

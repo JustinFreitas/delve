@@ -28,16 +28,18 @@ public final class ModuleSchema {
             ModuleMonster monster,
             int treasureGold,
             ModuleTrap trap,
+            ModuleTrap treasureTrap,
             String special,
             boolean stairsDown,
             boolean stairsUp,
             Integer stairsToLevel,
-            Integer stairsToRoom) {}
+            Integer stairsToRoom,
+            int width) {}
 
     /** A connection to another keyed area, as read from the room's description ("door to area 7"). */
-    public record ModuleExit(String direction, int toRoomId, String door, boolean secret) {}
+    public record ModuleExit(String direction, int toRoomId, String door, boolean secret, ModuleTrap trap) {}
 
-    public record ModuleMonster(String name, int count) {}
+    public record ModuleMonster(String name, int count, String disposition) {}
 
     public record ModuleTrap(String description) {}
 }

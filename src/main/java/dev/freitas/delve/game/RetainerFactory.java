@@ -38,35 +38,41 @@ public class RetainerFactory {
         return r;
     }
 
+    /** A class's starting retainer equipment package. Exposed so other call sites (the {@code /hire}
+        "smart" bulk-hire class ordering) can derive a class-level stat proxy from the exact same rules
+        a real hire gets, instead of a second, driftable table. {@code secondaryWeapon}/{@code
+        secondaryWeaponDamage} are a carried missile weapon the retainer isn't currently wielding as
+        {@code weapon} (null when none fits the class, e.g. the Magic-User's dagger-only tradition) —
+        lets a melee-equipped retainer still fire from rank 2+ before melee closes. */
+    public record Equipment(
+            Armor armor, boolean shield, String weapon, DamageRoll weaponDamage,
+            String secondaryWeapon, DamageRoll secondaryWeaponDamage) {}
+
+    private static final DamageRoll SLING_DAMAGE = new DamageRoll(1, 4);
+
+    public static Equipment equipmentFor(CharacterClass characterClass) {
+        return switch (characterClass) {
+            case FIGHTER, DWARF -> new Equipment(Armor.CHAIN_MAIL, true,
+                    characterClass == CharacterClass.DWARF ? "Battle axe" : "Sword", new DamageRoll(1, 8),
+                    "Sling", SLING_DAMAGE);
+            case CLERIC -> new Equipment(Armor.CHAIN_MAIL, true, "Mace", new DamageRoll(1, 6),
+                    "Sling", SLING_DAMAGE); // blunt, fits the cleric's no-edged-weapons tradition
+            case MAGIC_USER -> new Equipment(Armor.NONE, false, "Dagger", new DamageRoll(1, 4), null, null);
+            case THIEF -> new Equipment(Armor.LEATHER, false, "Sword", new DamageRoll(1, 8), "Sling", SLING_DAMAGE);
+            case ELF -> new Equipment(Armor.LEATHER, false, "Sword", new DamageRoll(1, 8),
+                    "Short bow", new DamageRoll(1, 6));
+            case HALFLING -> new Equipment(Armor.LEATHER, false, "Short sword", new DamageRoll(1, 6),
+                    "Sling", SLING_DAMAGE);
+        };
+    }
+
     private void equip(Retainer r, CharacterClass characterClass) {
-        switch (characterClass) {
-            case FIGHTER, DWARF -> {
-                r.setArmor(Armor.CHAIN_MAIL);
-                r.setShield(true);
-                r.setMainWeapon(characterClass == CharacterClass.DWARF ? "Battle axe" : "Sword");
-                r.setMainWeaponDamage(new DamageRoll(1, 8));
-            }
-            case CLERIC -> {
-                r.setArmor(Armor.CHAIN_MAIL);
-                r.setShield(true);
-                r.setMainWeapon("Mace");
-                r.setMainWeaponDamage(new DamageRoll(1, 6));
-            }
-            case MAGIC_USER -> {
-                r.setArmor(Armor.NONE);
-                r.setMainWeapon("Dagger");
-                r.setMainWeaponDamage(new DamageRoll(1, 4));
-            }
-            case THIEF, ELF -> {
-                r.setArmor(Armor.LEATHER);
-                r.setMainWeapon("Sword");
-                r.setMainWeaponDamage(new DamageRoll(1, 8));
-            }
-            case HALFLING -> {
-                r.setArmor(Armor.LEATHER);
-                r.setMainWeapon("Short sword");
-                r.setMainWeaponDamage(new DamageRoll(1, 6));
-            }
-        }
+        Equipment eq = equipmentFor(characterClass);
+        r.setArmor(eq.armor());
+        r.setShield(eq.shield());
+        r.setMainWeapon(eq.weapon());
+        r.setMainWeaponDamage(eq.weaponDamage());
+        r.setSecondaryWeapon(eq.secondaryWeapon());
+        r.setSecondaryWeaponDamage(eq.secondaryWeaponDamage());
     }
 }

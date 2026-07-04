@@ -5,14 +5,19 @@ import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
+import dev.freitas.delve.game.session.ExplorationResult;
+import dev.freitas.delve.game.session.LightingService;
 import org.springframework.stereotype.Component;
 
 /** Releases a retainer from service: {@code /dismiss <name>}. */
 @Component
 public class DismissCommand extends Command {
 
-    public DismissCommand() {
+    private final LightingService lighting;
+
+    public DismissCommand(LightingService lighting) {
         super("dismiss", "fire");
+        this.lighting = lighting;
     }
 
     @Override
@@ -37,8 +42,11 @@ public class DismissCommand extends Command {
             return;
         }
         save.getRetainers().remove(match);
+        ExplorationResult result = new ExplorationResult();
+        result.add("You release **" + match.getName() + "** from service.");
+        lighting.reconcileBearer(save, result);
         ctx.getBeans().gameState.save(userId, save);
-        ctx.reply("You release **" + match.getName() + "** from service.");
+        ctx.reply(result.text());
     }
 
     @Override

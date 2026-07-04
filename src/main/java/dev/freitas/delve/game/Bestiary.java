@@ -13,24 +13,26 @@ import java.util.Map;
  */
 public final class Bestiary {
 
+    // moveRate (feet/turn) is a proposed default per monster, consistent in spirit with this file's
+    // existing approximated AC/HD/morale values — adjustable later.
     public static final MonsterType GOBLIN =
-            new MonsterType("Goblin", 1, -1, 6, new DamageRoll(1, 6), 7, 5, "2d4");
+            new MonsterType("Goblin", 1, -1, 6, new DamageRoll(1, 6), 7, 5, "2d4", 60);
     public static final MonsterType KOBOLD =
-            new MonsterType("Kobold", 1, -1, 7, new DamageRoll(1, 4), 6, 5, "4d4");
+            new MonsterType("Kobold", 1, -1, 7, new DamageRoll(1, 4), 6, 5, "4d4", 60);
     public static final MonsterType SKELETON =
-            new MonsterType("Skeleton", 1, 0, 7, new DamageRoll(1, 6), 12, 10, "3d4");
+            new MonsterType("Skeleton", 1, 0, 7, new DamageRoll(1, 6), 12, 10, "3d4", 60);
     public static final MonsterType ORC =
-            new MonsterType("Orc", 1, 0, 6, new DamageRoll(1, 6), 8, 10, "2d4");
+            new MonsterType("Orc", 1, 0, 6, new DamageRoll(1, 6), 8, 10, "2d4", 60);
     public static final MonsterType STIRGE =
-            new MonsterType("Stirge", 1, 0, 7, new DamageRoll(1, 3), 9, 13, "1d10");
+            new MonsterType("Stirge", 1, 0, 7, new DamageRoll(1, 3), 9, 13, "1d10", 30);
     public static final MonsterType HOBGOBLIN =
-            new MonsterType("Hobgoblin", 1, 1, 6, new DamageRoll(1, 8), 8, 15, "1d6");
+            new MonsterType("Hobgoblin", 1, 1, 6, new DamageRoll(1, 8), 8, 15, "1d6", 90);
     public static final MonsterType ZOMBIE =
-            new MonsterType("Zombie", 2, 0, 8, new DamageRoll(1, 8), 12, 20, "2d4");
+            new MonsterType("Zombie", 2, 0, 8, new DamageRoll(1, 8), 12, 20, "2d4", 60);
     public static final MonsterType GIANT_RAT =
-            new MonsterType("Giant Rat", 1, 0, 7, new DamageRoll(1, 3), 8, 5, "3d6");
+            new MonsterType("Giant Rat", 1, 0, 7, new DamageRoll(1, 3), 8, 5, "3d6", 120);
     public static final MonsterType BUGBEAR =
-            new MonsterType("Bugbear", 3, 1, 5, new DamageRoll(2, 4), 9, 75, "2d4");
+            new MonsterType("Bugbear", 3, 1, 5, new DamageRoll(2, 4), 9, 75, "2d4", 90);
 
     private static final Map<String, MonsterType> BY_NAME = new LinkedHashMap<>();
 

@@ -77,6 +77,7 @@ public class CharacterFactory {
                 setWeapon(c, weapon, new DamageRoll(1, 8));
                 gear.add(weapon);
                 gear.add("Dagger");
+                gear.add("Sling & 30 stones"); // cheap, one-handed missile backup
             }
             case CLERIC -> {
                 c.setArmor(Armor.CHAIN_MAIL);
@@ -84,12 +85,14 @@ public class CharacterFactory {
                 setWeapon(c, "Mace", new DamageRoll(1, 6)); // clerics use blunt weapons only
                 gear.add("Mace");
                 gear.add("Holy symbol (wooden)");
+                gear.add("Sling & 30 stones"); // blunt, fits the no-edged-weapons tradition
             }
             case MAGIC_USER -> {
                 c.setArmor(Armor.NONE);
                 setWeapon(c, "Dagger", new DamageRoll(1, 4));
                 gear.add("Dagger");
                 gear.add("Spellbook");
+                // No missile weapon: B/X restricts magic-users to the dagger alone.
             }
             case THIEF -> {
                 c.setArmor(Armor.LEATHER);
@@ -97,6 +100,7 @@ public class CharacterFactory {
                 gear.add("Sword");
                 gear.add("Dagger");
                 gear.add("Thieves' tools");
+                gear.add("Sling & 30 stones");
             }
             case ELF -> {
                 c.setArmor(Armor.CHAIN_MAIL);

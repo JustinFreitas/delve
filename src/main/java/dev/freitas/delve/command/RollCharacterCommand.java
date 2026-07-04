@@ -5,6 +5,7 @@ import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.GameSession;
 import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
@@ -57,7 +58,13 @@ public class RollCharacterCommand extends Command {
         spells.autoPrepare(character); // a fresh caster is ready to cast (no-op for non-casters)
 
         boolean replaced = ctx.getBeans().gameState.load(ctx.getInvokerUserId()).hasCharacter();
-        ctx.getBeans().gameState.mutate(ctx.getInvokerUserId(), save -> save.setCharacter(character));
+        // A fresh character starts a fresh dungeon session too — otherwise it can inherit a stale
+        // in-progress delve's state (dungeon position, active combat, who's carrying the light, etc.)
+        // from whoever the previous character was.
+        ctx.getBeans().gameState.mutate(ctx.getInvokerUserId(), save -> {
+            save.setCharacter(character);
+            save.setSession(new GameSession());
+        });
 
         ctx.reply("Rolled up **" + name + "**, a level 1 " + characterClass.displayName() + "!"
                 + (replaced ? " _(your previous character was replaced)_" : ""));

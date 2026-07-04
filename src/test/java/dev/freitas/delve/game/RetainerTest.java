@@ -54,6 +54,32 @@ class RetainerTest {
     }
 
     @Test
+    void equipmentForMatchesWhatCreateActuallyEquips() {
+        for (CharacterClass cls : CharacterClass.values()) {
+            Retainer r = retainerFactory.create("Test", cls, 1, 9);
+            RetainerFactory.Equipment eq = RetainerFactory.equipmentFor(cls);
+            assertThat(r.getArmor()).as(cls + " armor").isEqualTo(eq.armor());
+            assertThat(r.isShield()).as(cls + " shield").isEqualTo(eq.shield());
+            assertThat(r.getMainWeapon()).as(cls + " weapon").isEqualTo(eq.weapon());
+            assertThat(r.getMainWeaponDamage()).as(cls + " damage").isEqualTo(eq.weaponDamage());
+            assertThat(r.getSecondaryWeapon()).as(cls + " secondary weapon").isEqualTo(eq.secondaryWeapon());
+            assertThat(r.getSecondaryWeaponDamage()).as(cls + " secondary damage").isEqualTo(eq.secondaryWeaponDamage());
+        }
+    }
+
+    @Test
+    void everyClassExceptMagicUserGetsAMissileBackupWeapon() {
+        for (CharacterClass cls : CharacterClass.values()) {
+            RetainerFactory.Equipment eq = RetainerFactory.equipmentFor(cls);
+            if (cls == CharacterClass.MAGIC_USER) {
+                assertThat(eq.secondaryWeapon()).as(cls + " has no missile backup").isNull();
+            } else {
+                assertThat(eq.secondaryWeapon()).as(cls + " missile backup").isNotNull();
+            }
+        }
+    }
+
+    @Test
     void retainersFightAndShareXp() {
         SaveGame save = combatSave(Bestiary.ORC, 2);
         Character pc = save.getCharacter();
@@ -75,10 +101,14 @@ class RetainerTest {
 
     @Test
     void disloyalRetainersDesertWhenThePartyFlees() {
+        // Desertion is only ever at risk after a genuinely bad fight, and only for a retainer who'd
+        // already broken (fled=true, e.g. from being bloodied earlier this delve) — simulate both here.
         SaveGame save = combatSave(Bestiary.GIANT_RAT, 1);
+        save.getCharacter().setCurrentHp(save.getCharacter().getMaxHp() / 5); // bloodied: catastrophic gate
         Retainer coward = retainerFactory.create("Mott", CharacterClass.THIEF, 1, 0); // loyalty 0 -> always deserts
         coward.setMaxHp(30);
         coward.setCurrentHp(30);
+        coward.setFled(true); // already broke earlier this delve
         save.getRetainers().add(coward);
 
         combat.startCombat(save);
@@ -90,15 +120,33 @@ class RetainerTest {
     @Test
     void loyalRetainersStayThroughARout() {
         SaveGame save = combatSave(Bestiary.GIANT_RAT, 1);
+        save.getCharacter().setCurrentHp(save.getCharacter().getMaxHp() / 5); // bloodied: catastrophic gate
         Retainer stalwart = retainerFactory.create("Gwen", CharacterClass.FIGHTER, 1, 12); // never fails morale
         stalwart.setMaxHp(40);
         stalwart.setCurrentHp(40);
+        stalwart.setFled(true); // already broke earlier this delve, but loyalty holds
         save.getRetainers().add(stalwart);
 
         combat.startCombat(save);
         combat.flee(save);
 
         assertThat(save.getRetainers()).containsExactly(stalwart);
+    }
+
+    @Test
+    void untouchedRetainersJustRetreatWithoutRiskingDesertion() {
+        // The bug this guards against: fleeing a barely-started fight (nobody hurt, nobody already
+        // broken) must never roll desertion at all, no matter how disloyal a retainer is.
+        SaveGame save = combatSave(Bestiary.GIANT_RAT, 1);
+        Retainer coward = retainerFactory.create("Mott", CharacterClass.THIEF, 1, 0); // loyalty 0
+        coward.setMaxHp(30);
+        coward.setCurrentHp(30);
+        save.getRetainers().add(coward);
+
+        combat.startCombat(save);
+        combat.flee(save);
+
+        assertThat(save.getRetainers()).containsExactly(coward);
     }
 
     private SaveGame combatSave(MonsterType type, int count) {

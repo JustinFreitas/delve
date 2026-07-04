@@ -14,6 +14,7 @@ import dev.freitas.delve.game.model.DoorState;
 import dev.freitas.delve.game.model.Dungeon;
 import dev.freitas.delve.game.model.DungeonLevel;
 import dev.freitas.delve.game.model.Exit;
+import dev.freitas.delve.game.model.MonsterDisposition;
 import dev.freitas.delve.game.model.MonsterType;
 import dev.freitas.delve.game.model.Room;
 import java.io.IOException;
@@ -126,6 +127,10 @@ public final class ModuleLoader {
         room.setDescription(mr.description() != null ? mr.description()
                 : (mr.name() != null ? mr.name() : "an unremarkable area"));
         room.setReadAloud(mr.readAloud());
+        // A record's missing "width" key deserializes to 0, not the desired default of 2 — must be
+        // defaulted explicitly here or every existing module (none carry a width key) would silently
+        // become 1-wide.
+        room.setCorridorWidth(mr.width() > 0 ? mr.width() : 2);
 
         if (mr.exits() != null) {
             for (ModuleExit me : mr.exits()) {
@@ -134,7 +139,13 @@ public final class ModuleLoader {
                     warnings.add("Room " + mr.id() + ": unknown exit direction '" + me.direction() + "' (skipped).");
                     continue;
                 }
-                room.getExits().put(dir, new Exit(dir, me.toRoomId(), parseDoor(me.door()), me.secret()));
+                Exit exit = new Exit(dir, me.toRoomId(), parseDoor(me.door()), me.secret());
+                if (me.trap() != null && me.trap().description() != null) {
+                    exit.setTrapped(true);
+                    exit.setTrapDescription(me.trap().description());
+                    exit.setTrapDamage(DEFAULT_TRAP_DAMAGE);
+                }
+                room.getExits().put(dir, exit);
             }
         }
 
@@ -143,6 +154,7 @@ public final class ModuleLoader {
             room.setContent(ContentType.MONSTER);
             room.setMonsterName(resolveMonster(mr.monster().name(), mr.id(), warnings));
             room.setMonsterCount(mr.monster().count());
+            room.setScriptedDisposition(parseDisposition(mr.monster().disposition()));
         } else if (mr.special() != null && !mr.special().isBlank()) {
             room.setContent(ContentType.SPECIAL);
         }
@@ -159,6 +171,11 @@ public final class ModuleLoader {
         if (mr.treasureGold() > 0) {
             room.setHasTreasure(true);
             room.setTreasureGold(mr.treasureGold());
+        }
+        if (mr.treasureTrap() != null && mr.treasureTrap().description() != null) {
+            room.setTreasureTrapped(true);
+            room.setTreasureTrapDescription(mr.treasureTrap().description());
+            room.setTreasureTrapDamage(DEFAULT_TRAP_DAMAGE);
         }
 
         room.setStairsDown(mr.stairsDown());
@@ -213,6 +230,19 @@ public final class ModuleLoader {
         warnings.add("Room " + roomId + ": monster '" + raw + "' not in the bestiary; using "
                 + FALLBACK_MONSTER + " as a stand-in (edit the module JSON to fix).");
         return FALLBACK_MONSTER;
+    }
+
+    /** Parses an authored disposition override; unrecognized or absent text means "roll for it". */
+    private static MonsterDisposition parseDisposition(String disposition) {
+        if (disposition == null || disposition.isBlank()) {
+            return null;
+        }
+        return switch (disposition.toLowerCase(Locale.ROOT).trim()) {
+            case "hostile" -> MonsterDisposition.HOSTILE;
+            case "neutral" -> MonsterDisposition.NEUTRAL;
+            case "friendly" -> MonsterDisposition.FRIENDLY;
+            default -> null;
+        };
     }
 
     private static DoorState parseDoor(String door) {

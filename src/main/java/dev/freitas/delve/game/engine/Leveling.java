@@ -13,11 +13,22 @@ public final class Leveling {
     private Leveling() {}
 
     public static List<String> awardXp(Advanceable c, int rawXp, Dice dice) {
+        return awardXp(c, rawXp, dice, false);
+    }
+
+    /** As {@link #awardXp(Advanceable, int, Dice)}, but with {@code verbose} spelling out the raw
+        award and the prime-requisite percentage behind the adjusted total (used by {@code /autodelve}'s
+        verbose log detail, where the terse total alone can look like a miscalculation). */
+    public static List<String> awardXp(Advanceable c, int rawXp, Dice dice, boolean verbose) {
         List<String> messages = new ArrayList<>();
         CharacterClass cls = c.getCharacterClass();
-        int adjusted = Advancement.adjustedAward(rawXp, cls.xpBonusPercent(c.getAbilities()));
+        int bonusPercent = cls.xpBonusPercent(c.getAbilities());
+        int adjusted = Advancement.adjustedAward(rawXp, bonusPercent);
         c.setXp(c.getXp() + adjusted);
-        messages.add("Gained **" + adjusted + " XP** (total " + c.getXp() + ").");
+        String suffix = verbose
+                ? " (" + rawXp + " × " + (100 + bonusPercent) + "%, total " + c.getXp() + ")."
+                : " (total " + c.getXp() + ").";
+        messages.add("Gained **" + adjusted + " XP**" + suffix);
 
         int maxLevel = Advancement.maxLevel(cls);
         while (c.getLevel() < maxLevel

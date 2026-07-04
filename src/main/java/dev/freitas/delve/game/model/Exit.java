@@ -1,5 +1,7 @@
 package dev.freitas.delve.game.model;
 
+import dev.freitas.delve.game.engine.DamageRoll;
+
 /**
  * A one-way link from a room toward another in a given direction (each connection stores a matching
  * {@code Exit} on both rooms). Mutable so doors can be opened and secret passages revealed during
@@ -12,6 +14,17 @@ public class Exit {
     private DoorState door = DoorState.NONE;
     private boolean secret;
     private boolean revealed;
+
+    /** Whether a character has already spent their one listening attempt at this door. */
+    private boolean listened;
+
+    // Corridor trap in the passage itself — same shape as Room's own trap, sprung on traversal instead
+    // of on room entry.
+    private boolean trapped;
+    private boolean trapDetected;
+    private boolean trapSprung;
+    private String trapDescription;
+    private DamageRoll trapDamage;
 
     public Exit() {}
 
@@ -71,5 +84,53 @@ public class Exit {
 
     public void setRevealed(boolean revealed) {
         this.revealed = revealed;
+    }
+
+    public boolean isListened() {
+        return listened;
+    }
+
+    public void setListened(boolean listened) {
+        this.listened = listened;
+    }
+
+    public boolean isTrapped() {
+        return trapped;
+    }
+
+    public void setTrapped(boolean trapped) {
+        this.trapped = trapped;
+    }
+
+    public boolean isTrapDetected() {
+        return trapDetected;
+    }
+
+    public void setTrapDetected(boolean trapDetected) {
+        this.trapDetected = trapDetected;
+    }
+
+    public boolean isTrapSprung() {
+        return trapSprung;
+    }
+
+    public void setTrapSprung(boolean trapSprung) {
+        this.trapSprung = trapSprung;
+    }
+
+    public String getTrapDescription() {
+        return trapDescription;
+    }
+
+    public void setTrapDescription(String trapDescription) {
+        this.trapDescription = trapDescription;
+    }
+
+    public DamageRoll getTrapDamage() {
+        return trapDamage;
+    }
+
+    public void setTrapDamage(DamageRoll trapDamage) {
+        this.trapDamage = trapDamage;
     }
 }

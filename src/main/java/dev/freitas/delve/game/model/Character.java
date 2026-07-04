@@ -40,10 +40,19 @@ public class Character implements Combatant, Advanceable {
     /** Torches carried for lighting the way; consumed as they burn out underground. */
     private int torches = 6;
 
+    /** Lanterns owned (reusable — burns oil flasks rather than being consumed itself). */
+    private int lanterns = 0;
+
+    /** Flasks of oil owned, a lantern's fuel (one flask per {@link dev.freitas.delve.game.engine.LightSource#turnsPerUse()}). */
+    private int oilFlasks = 0;
+
     private List<String> inventory = new ArrayList<>();
     private List<String> spellbook = new ArrayList<>();
     private List<String> memorizedSpells = new ArrayList<>();
     private int healingPotions = 0;
+
+    /** Number of delves begun (manual or simulated via autodelve), for tracking career progress. */
+    private int delveCount = 0;
 
     public Character() {}
 
@@ -69,6 +78,7 @@ public class Character implements Combatant, Advanceable {
     }
 
     /** Missile to-hit modifier: DEX modifier. */
+    @Override
     @JsonIgnore
     public int missileToHitModifier() {
         return abilities.modifier(Ability.DEX);
@@ -194,6 +204,22 @@ public class Character implements Combatant, Advanceable {
         this.torches = torches;
     }
 
+    public int getLanterns() {
+        return lanterns;
+    }
+
+    public void setLanterns(int lanterns) {
+        this.lanterns = lanterns;
+    }
+
+    public int getOilFlasks() {
+        return oilFlasks;
+    }
+
+    public void setOilFlasks(int oilFlasks) {
+        this.oilFlasks = oilFlasks;
+    }
+
     public List<String> getInventory() {
         return inventory;
     }
@@ -224,5 +250,13 @@ public class Character implements Combatant, Advanceable {
 
     public void setHealingPotions(int healingPotions) {
         this.healingPotions = healingPotions;
+    }
+
+    public int getDelveCount() {
+        return delveCount;
+    }
+
+    public void setDelveCount(int delveCount) {
+        this.delveCount = delveCount;
     }
 }

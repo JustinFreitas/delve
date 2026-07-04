@@ -3,9 +3,14 @@ package dev.freitas.delve.game.session;
 import dev.freitas.delve.game.Bestiary;
 import dev.freitas.delve.game.dungeon.DungeonGenerator;
 import dev.freitas.delve.game.engine.Ability;
+import dev.freitas.delve.game.engine.CharacterClass;
+import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Leveling;
+import dev.freitas.delve.game.engine.LightSource;
 import dev.freitas.delve.game.engine.SavingThrows;
+import dev.freitas.delve.game.engine.ThiefSkills;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.ContentType;
 import dev.freitas.delve.game.model.Direction;
@@ -13,7 +18,9 @@ import dev.freitas.delve.game.model.DoorState;
 import dev.freitas.delve.game.model.Dungeon;
 import dev.freitas.delve.game.model.Exit;
 import dev.freitas.delve.game.model.GameSession;
+import dev.freitas.delve.game.model.MonsterDisposition;
 import dev.freitas.delve.game.model.MonsterType;
+import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
@@ -33,16 +40,23 @@ public class ExplorationService {
 
     private static final int LEVELS = 3;
     private static final int ROOMS_PER_LEVEL = 10;
-    private static final int TORCH_TURNS = 6;
+
+    /** Proposed default: a non-Thief's flat chance to disarm a treasure trap. */
+    private static final int NON_THIEF_REMOVE_TRAPS_CHANCE = 5;
+
+    /** Proposed default: passive trap sense (pole or Dwarf racial bonus) while walking, not searching. */
+    private static final int PASSIVE_TRAP_SENSE_CHANCE = 1;
 
     private final Dice dice;
     private final DungeonGenerator generator;
     private final CombatService combat;
+    private final LightingService lighting;
 
-    public ExplorationService(Dice dice, DungeonGenerator generator, CombatService combat) {
+    public ExplorationService(Dice dice, DungeonGenerator generator, CombatService combat, LightingService lighting) {
         this.dice = dice;
         this.generator = generator;
         this.combat = combat;
+        this.lighting = lighting;
     }
 
     /** Begins a fresh procedurally-generated dungeon run for the character, lighting the first torch. */
@@ -64,22 +78,19 @@ public class ExplorationService {
         Character character = save.getCharacter();
         GameSession session = save.getSession();
 
+        character.setDelveCount(character.getDelveCount() + 1);
         session.setDungeon(dungeon);
         session.setCurrentLevel(0);
         session.setCurrentRoomId(dungeon.level(0).getEntranceRoomId());
         session.setDungeonTurn(0);
         session.setInDarkness(false);
         session.setState(SessionState.EXPLORING);
+        session.setPolingFrontRank(false);
+        session.setTurnsSinceRest(0);
 
         ExplorationResult result = new ExplorationResult();
         result.add(introLine);
-        if (character.getTorches() > 0) {
-            character.setTorches(character.getTorches() - 1);
-            session.setTorchTurnsRemaining(TORCH_TURNS);
-        } else {
-            session.setInDarkness(true);
-            result.add("You have no torches — you grope forward in darkness!");
-        }
+        lighting.lightUp(save, LightSource.TORCH, result);
         session.currentRoom().setVisited(true);
         result.add("");
         result.add(describeRoom(session));
@@ -108,13 +119,21 @@ public class ExplorationService {
                     + exit.getDoor().name().toLowerCase() + " door. Try `open " + direction.lower() + "`.");
         }
 
-        session.setCurrentRoomId(exit.getDestinationRoomId());
-        session.currentRoom().setVisited(true);
-
         ExplorationResult result = new ExplorationResult();
         result.add("You go " + direction.lower() + ".");
+
+        // Corridor trap: checked/sprung for the passage itself, while still logically "in" it.
+        maybePassiveCorridorTrapSense(save, exit, result);
+        maybeSpringCorridorTrap(save, exit, result);
+
+        session.setCurrentRoomId(exit.getDestinationRoomId());
+        session.currentRoom().setVisited(true);
         advanceTurn(save, result);
+
+        maybePassiveRoomTrapSense(save, result);
         maybeSpringTrap(save, result);
+        maybePassiveSecretDoorSense(save, result);
+
         result.add("");
         result.add(describeRoom(session));
         handleEncounter(save, result);
@@ -145,17 +164,19 @@ public class ExplorationService {
 
     /** Searches the current room for secret doors, traps and treasure; advances one dungeon turn. */
     public ExplorationResult search(SaveGame save) {
+        return search(save, false);
+    }
+
+    /** As {@link #search(SaveGame)}, but with {@code verbose} showing the raw XP/prime-requisite
+        breakdown behind a treasure find (used by {@code /autodelve}'s verbose log detail). */
+    public ExplorationResult search(SaveGame save, boolean verbose) {
         GameSession session = save.getSession();
         Character character = save.getCharacter();
         Room room = session.currentRoom();
         ExplorationResult result = new ExplorationResult();
         result.add("You search the room carefully...");
 
-        // Elves find secret doors more readily (2-in-6 vs 1-in-6).
-        int secretChance = switch (character.getCharacterClass()) {
-            case ELF -> 2;
-            default -> 1;
-        };
+        int secretChance = secretDoorChance(character.getCharacterClass());
         int found = 0;
         for (Exit exit : room.getExits().values()) {
             if (exit.isSecret() && !exit.isRevealed() && dice.d(6) <= secretChance) {
@@ -165,31 +186,37 @@ public class ExplorationService {
             }
         }
 
-        // Dwarves are keen on stonework traps (2-in-6).
-        int trapChance = switch (character.getCharacterClass()) {
-            case DWARF -> 2;
-            default -> 1;
-        };
+        int trapChance = trapDetectionChance(character.getCharacterClass());
         if (room.isTrapped() && !room.isTrapDetected() && !room.isTrapSprung() && dice.d(6) <= trapChance) {
             room.setTrapDetected(true);
             found++;
             result.add("You detect a trap: " + room.getTrapDescription() + ".");
         }
+        for (Exit exit : room.getExits().values()) {
+            if (exit.isTrapped() && !exit.isTrapDetected() && !exit.isTrapSprung() && dice.d(6) <= trapChance) {
+                exit.setTrapDetected(true);
+                mirrorExitTrapState(session, exit);
+                found++;
+                result.add("You detect a trap in the passage to the " + exit.getDirection().lower() + ": "
+                        + exit.getTrapDescription() + ".");
+            }
+        }
 
         if (room.isHasTreasure() && !room.isLooted()) {
-            room.setLooted(true);
-            int gold = room.getTreasureGold();
-            character.setGold(character.getGold() + gold);
-            found++;
-            result.add("You find treasure: **" + gold + " gp**!");
-            // B/X awards 1 XP per gold piece recovered from the dungeon — the main route to advancement.
-            if (gold > 0) {
-                result.getLines().addAll(Leveling.awardXp(character, gold, dice));
-            }
-            // A fraction of hoards include a potion of healing among the coin.
-            if (dice.d(4) == 1) {
-                character.setHealingPotions(character.getHealingPotions() + 1);
-                result.add("Among the coins is a **potion of healing**! (`quaff` to drink.)");
+            if (room.isTreasureTrapped() && !room.isTreasureTrapDisarmed()) {
+                found++;
+                if (tryDisarmTreasureTrap(character)) {
+                    room.setTreasureTrapDisarmed(true);
+                    result.add("You carefully disarm " + room.getTreasureTrapDescription()
+                            + " guarding the treasure.");
+                    loot(save, room, result, verbose);
+                } else {
+                    applyTrapDamage(save, room.getTreasureTrapDamage(), room.getTreasureTrapDescription(), result);
+                    // Treasure stays put (room.looted is never set) so a retry is possible on a later search.
+                }
+            } else {
+                found++;
+                loot(save, room, result, verbose);
             }
         }
 
@@ -200,6 +227,64 @@ public class ExplorationService {
         advanceTurn(save, result);
         handleEncounter(save, result);
         return result;
+    }
+
+    /** Adds the room's treasure to the character, with the existing XP-per-gold and potion chance. */
+    /** Loots the room's treasure, split across the party the same way combat XP already is: the PC
+        takes a full share, each living retainer a half-share (matching {@code CombatService.victory()}'s
+        convention) — so the PC's own gold and gp-based XP reflect only their cut, not the whole hoard. */
+    private void loot(SaveGame save, Room room, ExplorationResult result, boolean verbose) {
+        Character character = save.getCharacter();
+        room.setLooted(true);
+        
+        int gemsValue = room.getTreasureGemsValue();
+        int jewelryValue = room.getTreasureJewelryValue();
+        int totalGold = room.getTreasureGold() + gemsValue + jewelryValue;
+        
+        StringBuilder treasureFound = new StringBuilder("You find treasure: **").append(room.getTreasureGold()).append(" gp**");
+        if (gemsValue > 0) {
+            treasureFound.append(", gems worth **").append(gemsValue).append(" gp**");
+        }
+        if (jewelryValue > 0) {
+            treasureFound.append(", jewelry worth **").append(jewelryValue).append(" gp**");
+        }
+        treasureFound.append("!");
+        result.add(treasureFound.toString());
+
+        List<Retainer> survivors = save.livingRetainers();
+        int shares = 1 + survivors.size();
+        int pcShare = totalGold / shares;
+
+        character.setGold(character.getGold() + pcShare);
+        if (!survivors.isEmpty() && pcShare < totalGold) {
+            result.add("Your share: **" + pcShare + " gp** (the rest goes to your retainers' cut).");
+        }
+        // B/X awards 1 XP per gold piece recovered from the dungeon — the main route to advancement.
+        // Each side is credited XP for its own share, not the full haul.
+        if (pcShare > 0) {
+            result.getLines().addAll(Leveling.awardXp(character, pcShare, dice, verbose));
+        }
+        for (Retainer retainer : survivors) {
+            for (String line : Leveling.awardXp(retainer, pcShare / 2, dice)) {
+                if (line.contains("Level up")) {
+                    result.add(line);
+                }
+            }
+        }
+
+        // A fraction of hoards include a potion of healing among the coin.
+        if (dice.d(4) == 1) {
+            character.setHealingPotions(character.getHealingPotions() + 1);
+            result.add("Among the coins is a **potion of healing**! (`quaff` to drink.)");
+        }
+    }
+
+    /** Remove Traps: a Thief's improving level-based chance; everyone else a flat, low fallback. */
+    private boolean tryDisarmTreasureTrap(Character character) {
+        int chance = character.getCharacterClass() == CharacterClass.THIEF
+                ? ThiefSkills.removeTraps(character.getLevel())
+                : NON_THIEF_REMOVE_TRAPS_CHANCE;
+        return dice.d(100) <= chance;
     }
 
     /** Attempts to open a door in the given direction. Forcing a stuck door costs a turn. */
@@ -242,6 +327,41 @@ public class ExplorationService {
         }
     }
 
+    /** Listens at a door for sounds beyond it: a 1-in-6 passive chance, one attempt per exit, and no
+        turn cost (matches the house rule that this is always rolled while moving at exploration speed). */
+    public ExplorationResult listen(SaveGame save, Direction direction) {
+        GameSession session = save.getSession();
+        Room room = session.currentRoom();
+        Exit exit = room.getExits().get(direction);
+        if (exit == null || !exit.isKnown()) {
+            return ExplorationResult.failure("There is no door to the " + direction.lower() + ".");
+        }
+        if (exit.isListened()) {
+            return ExplorationResult.failure("You've already listened at the " + direction.lower() + " door.");
+        }
+        exit.setListened(true);
+        if (dice.d(6) > 1) {
+            return ExplorationResult.of("You press an ear to the door but hear nothing.");
+        }
+        Room destination = session.currentLevel().room(exit.getDestinationRoomId());
+        if (destination != null && destination.hasLiveMonster()) {
+            return ExplorationResult.of("You hear something moving beyond the " + direction.lower() + " door!");
+        }
+        return ExplorationResult.of("You listen carefully but hear nothing stirring beyond the "
+                + direction.lower() + " door.");
+    }
+
+    /** Rests for one turn, resetting the fatigue clock; still burns light and risks a wandering
+        monster like any other turn. */
+    public ExplorationResult rest(SaveGame save) {
+        ExplorationResult result = new ExplorationResult();
+        result.add("The party rests for a turn, catching their breath.");
+        advanceTurn(save, result);
+        save.getSession().setTurnsSinceRest(0);
+        handleEncounter(save, result);
+        return result;
+    }
+
     // --- internals ---------------------------------------------------------
 
     private void setBothDoors(GameSession session, Exit exit, DoorState state) {
@@ -253,28 +373,32 @@ public class ExplorationService {
         }
     }
 
-    /** Advances one dungeon turn: burns light and runs the wandering-monster check. */
+    /** A corridor trap is one physical hazard shared by both directions' {@link Exit} objects, which
+        aren't otherwise kept in sync (mirrors {@link #setBothDoors}) — detecting or springing it from
+        either room must update both so it can't be "re-discovered" or re-sprung walking back through. */
+    private void mirrorExitTrapState(GameSession session, Exit exit) {
+        Room destination = session.currentLevel().room(exit.getDestinationRoomId());
+        Exit back = destination == null ? null : destination.getExits().get(exit.getDirection().opposite());
+        if (back != null) {
+            back.setTrapDetected(exit.isTrapDetected());
+            back.setTrapSprung(exit.isTrapSprung());
+        }
+    }
+
+    /** Advances one dungeon turn: burns light, ticks the rest clock, and runs the wandering-monster
+        check. */
     private void advanceTurn(SaveGame save, ExplorationResult result) {
         GameSession session = save.getSession();
-        Character character = save.getCharacter();
         session.setDungeonTurn(session.getDungeonTurn() + 1);
+        session.setTurnsSinceRest(session.getTurnsSinceRest() + 1);
 
-        if (!session.isInDarkness()) {
-            session.setTorchTurnsRemaining(session.getTorchTurnsRemaining() - 1);
-            if (session.getTorchTurnsRemaining() <= 0) {
-                if (character.getTorches() > 0) {
-                    character.setTorches(character.getTorches() - 1);
-                    session.setTorchTurnsRemaining(TORCH_TURNS);
-                    result.add("_Your torch gutters out; you light another (" + character.getTorches() + " left)._");
-                } else {
-                    session.setInDarkness(true);
-                    result.add("**Your last torch burns out — you are plunged into darkness!**");
-                }
-            }
-        }
+        lighting.reconcileBearer(save, result);
+        lighting.tickFuel(save, result);
 
-        // Wandering monster check every other turn (1-in-6).
-        if (session.getDungeonTurn() % 2 == 0 && dice.d(6) == 1) {
+        // Wandering monster check every other turn (1-in-6, plus an extra roll per additional
+        // 8 party members beyond 9).
+        int partySize = 1 + save.livingRetainers().size();
+        if (session.getDungeonTurn() % 2 == 0 && wanderingMonsterTriggered(partySize)) {
             Room room = session.currentRoom();
             if (!room.hasLiveMonster()) {
                 MonsterType type = pickWanderingMonster(session.getCurrentLevel() + 1);
@@ -283,6 +407,7 @@ public class ExplorationService {
                 room.setMonsterName(type.name());
                 room.setMonsterCount(count);
                 room.setCleared(false);
+                room.setFreshEncounter(true);
                 result.add("**Wandering monster!** "
                         + count + " " + type.name().toLowerCase() + (count > 1 ? "s" : "") + " appear!");
             }
@@ -290,33 +415,145 @@ public class ExplorationService {
     }
 
     private void maybeSpringTrap(SaveGame save, ExplorationResult result) {
-        GameSession session = save.getSession();
-        Character character = save.getCharacter();
-        Room room = session.currentRoom();
+        Room room = save.getSession().currentRoom();
         if (!room.isTrapped() || room.isTrapSprung() || room.isTrapDetected()) {
             return;
         }
         // B/X: a trap springs on a 1-2 in 6 when entered unawares.
         if (dice.d(6) <= 2) {
             room.setTrapSprung(true);
-            int damage = room.getTrapDamage().roll(dice);
-            int save_ = SavingThrows.forCharacter(character.getCharacterClass(), character.getLevel())
-                    .paralysisPetrify();
-            boolean saved = dice.d20() >= save_;
-            if (saved) {
-                damage = Math.max(1, damage / 2);
+            applyTrapDamage(save, room.getTrapDamage(), room.getTrapDescription(), result);
+        }
+    }
+
+    /** Corridor counterpart of {@link #maybeSpringTrap}: sprung while traversing a trapped exit. */
+    private void maybeSpringCorridorTrap(SaveGame save, Exit exit, ExplorationResult result) {
+        if (!exit.isTrapped() || exit.isTrapSprung() || exit.isTrapDetected()) {
+            return;
+        }
+        if (dice.d(6) <= 2) {
+            exit.setTrapSprung(true);
+            mirrorExitTrapState(save.getSession(), exit);
+            applyTrapDamage(save, exit.getTrapDamage(), exit.getTrapDescription(), result);
+        }
+    }
+
+    /** Rolls trap damage against the character with a saving throw for half; shared by room, corridor
+        and treasure traps. */
+    private void applyTrapDamage(SaveGame save, DamageRoll damage, String description, ExplorationResult result) {
+        GameSession session = save.getSession();
+        Character character = save.getCharacter();
+        int amount = damage.roll(dice);
+        int saveTarget = SavingThrows.forCharacter(character.getCharacterClass(), character.getLevel())
+                .paralysisPetrify();
+        boolean saved = dice.d20() >= saveTarget;
+        if (saved) {
+            amount = Math.max(1, amount / 2);
+        }
+        character.setCurrentHp(character.getCurrentHp() - amount);
+        result.add("**A trap springs — " + description + "!** You take " + amount
+                + " damage" + (saved ? " (saved for half)" : "") + ".");
+        if (!character.isAlive()) {
+            session.setState(SessionState.IN_TOWN);
+            result.add("**" + character.getName() + " has died in the dungeon.**");
+        }
+    }
+
+    /** Base 1-in-6 wandering-monster check, plus an extra 1-in-6 roll for every additional set of 8
+        party members beyond 9 (any success triggers an encounter). */
+    private boolean wanderingMonsterTriggered(int partySize) {
+        if (dice.d(6) == 1) {
+            return true;
+        }
+        int extraChecks = partySize > 9 ? 1 + (partySize - 10) / 8 : 0;
+        for (int i = 0; i < extraChecks; i++) {
+            if (dice.d(6) == 1) {
+                return true;
             }
-            character.setCurrentHp(character.getCurrentHp() - damage);
-            result.add("**A trap springs — " + room.getTrapDescription() + "!** You take " + damage
-                    + " damage" + (saved ? " (saved for half)" : "") + ".");
-            if (!character.isAlive()) {
-                session.setState(SessionState.IN_TOWN);
-                result.add("**" + character.getName() + " has died in the dungeon.**");
+        }
+        return false;
+    }
+
+    /** Dwarf → 2-in-6, everyone else 1-in-6 — shared by the active `/search` bonus and the passive sense. */
+    private int trapDetectionChance(CharacterClass characterClass) {
+        return characterClass == CharacterClass.DWARF ? 2 : 1;
+    }
+
+    /** Elf → 2-in-6, everyone else 1-in-6 — shared by the active `/search` bonus and the passive sense. */
+    private int secretDoorChance(CharacterClass characterClass) {
+        return characterClass == CharacterClass.ELF ? 2 : 1;
+    }
+
+    private boolean anyLivingPartyMemberIsClass(SaveGame save, CharacterClass characterClass) {
+        Character character = save.getCharacter();
+        if (character.isAlive() && character.getCharacterClass() == characterClass) {
+            return true;
+        }
+        for (Retainer r : save.livingRetainers()) {
+            if (r.getCharacterClass() == characterClass) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Passive trap sense: tries the pole first (if poling and the front rank is engaged), then a
+        Dwarf's racial bonus — either can succeed, and only one roll happens so a poling Dwarf doesn't
+        double-roll for no reason. */
+    private boolean rollPassiveTrapSense(SaveGame save) {
+        GameSession session = save.getSession();
+        if (session.isPolingFrontRank()) {
+            int width = session.currentRoom().getCorridorWidth();
+            if (!Formation.engagedFront(save.fullOrder(), width).isEmpty()
+                    && dice.d(6) <= PASSIVE_TRAP_SENSE_CHANCE) {
+                return true;
+            }
+        }
+        if (anyLivingPartyMemberIsClass(save, CharacterClass.DWARF)) {
+            return dice.d(6) <= trapDetectionChance(CharacterClass.DWARF);
+        }
+        return false;
+    }
+
+    private void maybePassiveRoomTrapSense(SaveGame save, ExplorationResult result) {
+        Room room = save.getSession().currentRoom();
+        if (!room.isTrapped() || room.isTrapDetected() || room.isTrapSprung()) {
+            return;
+        }
+        if (rollPassiveTrapSense(save)) {
+            room.setTrapDetected(true);
+            result.add("You sense a trap here: " + room.getTrapDescription() + ".");
+        }
+    }
+
+    private void maybePassiveCorridorTrapSense(SaveGame save, Exit exit, ExplorationResult result) {
+        if (!exit.isTrapped() || exit.isTrapDetected() || exit.isTrapSprung()) {
+            return;
+        }
+        if (rollPassiveTrapSense(save)) {
+            exit.setTrapDetected(true);
+            mirrorExitTrapState(save.getSession(), exit);
+            result.add("You sense a trap ahead: " + exit.getTrapDescription() + ".");
+        }
+    }
+
+    /** Elf racial passive: notices a secret door on room entry, no `/search` needed. */
+    private void maybePassiveSecretDoorSense(SaveGame save, ExplorationResult result) {
+        if (!anyLivingPartyMemberIsClass(save, CharacterClass.ELF)) {
+            return;
+        }
+        Room room = save.getSession().currentRoom();
+        int chance = secretDoorChance(CharacterClass.ELF);
+        for (Exit exit : room.getExits().values()) {
+            if (exit.isSecret() && !exit.isRevealed() && dice.d(6) <= chance) {
+                exit.setRevealed(true);
+                result.add("You notice a secret door to the " + exit.getDirection().lower() + "!");
             }
         }
     }
 
-    /** When a live monster shares the room, rolls reaction and starts combat if it is hostile. */
+    /** When a live monster shares the room, rolls reaction (unless the room scripts a fixed disposition)
+        and starts combat if it is hostile. */
     private void handleEncounter(SaveGame save, ExplorationResult result) {
         GameSession session = save.getSession();
         if (session.getState() == SessionState.IN_COMBAT) {
@@ -328,11 +565,19 @@ public class ExplorationService {
         }
         MonsterType type = Bestiary.byName(room.getMonsterName());
         result.add("");
-        if (combat.isHostileReaction(save.getCharacter(), type)) {
+        MonsterDisposition scripted = room.getScriptedDisposition();
+        boolean hostile = scripted != null
+                ? scripted == MonsterDisposition.HOSTILE
+                : combat.isHostileReaction(save.getCharacter(), type);
+        if (hostile) {
             result.getLines().addAll(combat.startCombat(save).getLines());
         } else {
             String plural = room.getMonsterName().toLowerCase() + (room.getMonsterCount() > 1 ? "s" : "");
-            result.add("The " + plural + " watch you warily but do not attack yet. (`attack` to fight, or move on.)");
+            if (scripted == MonsterDisposition.FRIENDLY) {
+                result.add("The " + plural + " seem friendly and let you pass. (`attack` to fight anyway, or move on.)");
+            } else {
+                result.add("The " + plural + " watch you warily but do not attack yet. (`attack` to fight, or move on.)");
+            }
         }
     }
 
@@ -382,6 +627,10 @@ public class ExplorationService {
         }
         if (room.isStairsUp()) {
             sb.append("\nStairs lead back up (`move up`).");
+        }
+        if (room.getCorridorWidth() < 3) {
+            sb.append("\n_This passage is only wide enough for ").append(room.getCorridorWidth())
+                    .append(" abreast._");
         }
 
         sb.append("\n").append(describeExits(room));

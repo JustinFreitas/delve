@@ -33,8 +33,23 @@ public class Room {
     // Treasure.
     private boolean hasTreasure;
     private int treasureGold;
+    private int treasureGemsValue;
+    private int treasureJewelryValue;
+
+    // Treasure trap (independent of the room's own environmental trap above) — a chest/container guard.
+    private boolean treasureTrapped;
+    private boolean treasureTrapDisarmed;
+    private String treasureTrapDescription;
+    private DamageRoll treasureTrapDamage;
 
     private String specialText;
+
+    /** Authored/scripted monster reaction override; {@code null} means "roll for it" (today's behavior). */
+    private MonsterDisposition scriptedDisposition;
+
+    /** Set by the wandering-monster check this turn; consumed by {@code CombatService.startCombat()} to
+        pick a rolled encounter distance instead of the room-based short-range default. */
+    private boolean freshEncounter;
 
     // Inter-level stairs.
     private boolean stairsUp;
@@ -47,6 +62,9 @@ public class Room {
     private boolean searched;
     private boolean cleared;
     private boolean looted;
+
+    /** Marching-order rank ceiling for this room/corridor cell: how many can stand abreast (1-3, default 2). */
+    private int corridorWidth = 2;
 
     public Room() {}
 
@@ -179,6 +197,22 @@ public class Room {
         this.treasureGold = treasureGold;
     }
 
+    public int getTreasureGemsValue() {
+        return treasureGemsValue;
+    }
+
+    public void setTreasureGemsValue(int treasureGemsValue) {
+        this.treasureGemsValue = treasureGemsValue;
+    }
+
+    public int getTreasureJewelryValue() {
+        return treasureJewelryValue;
+    }
+
+    public void setTreasureJewelryValue(int treasureJewelryValue) {
+        this.treasureJewelryValue = treasureJewelryValue;
+    }
+
     public String getSpecialText() {
         return specialText;
     }
@@ -249,5 +283,61 @@ public class Room {
 
     public void setLooted(boolean looted) {
         this.looted = looted;
+    }
+
+    public int getCorridorWidth() {
+        return corridorWidth;
+    }
+
+    public void setCorridorWidth(int corridorWidth) {
+        this.corridorWidth = Math.max(1, Math.min(3, corridorWidth));
+    }
+
+    public boolean isTreasureTrapped() {
+        return treasureTrapped;
+    }
+
+    public void setTreasureTrapped(boolean treasureTrapped) {
+        this.treasureTrapped = treasureTrapped;
+    }
+
+    public boolean isTreasureTrapDisarmed() {
+        return treasureTrapDisarmed;
+    }
+
+    public void setTreasureTrapDisarmed(boolean treasureTrapDisarmed) {
+        this.treasureTrapDisarmed = treasureTrapDisarmed;
+    }
+
+    public String getTreasureTrapDescription() {
+        return treasureTrapDescription;
+    }
+
+    public void setTreasureTrapDescription(String treasureTrapDescription) {
+        this.treasureTrapDescription = treasureTrapDescription;
+    }
+
+    public DamageRoll getTreasureTrapDamage() {
+        return treasureTrapDamage;
+    }
+
+    public void setTreasureTrapDamage(DamageRoll treasureTrapDamage) {
+        this.treasureTrapDamage = treasureTrapDamage;
+    }
+
+    public MonsterDisposition getScriptedDisposition() {
+        return scriptedDisposition;
+    }
+
+    public void setScriptedDisposition(MonsterDisposition scriptedDisposition) {
+        this.scriptedDisposition = scriptedDisposition;
+    }
+
+    public boolean isFreshEncounter() {
+        return freshEncounter;
+    }
+
+    public void setFreshEncounter(boolean freshEncounter) {
+        this.freshEncounter = freshEncounter;
     }
 }

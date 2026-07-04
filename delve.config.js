@@ -16,6 +16,21 @@ function loadEnv() {
       if (i > 0) env[line.slice(0, i).trim()] = line.slice(i + 1).trim();
     }
   }
+  // Web mode is opt-in. Bot-only stays fully headless (web-application-type=none). Only when web is
+  // enabled do we start the servlet stack, and only when a real OAuth client id is present do we
+  // register the Discord provider — Boot rejects an empty OAuth client id at startup otherwise.
+  if (String(env.WEB_ENABLED || "").toLowerCase() === "true") {
+    env.WEB_APP_TYPE = "servlet";
+    if (env.DISCORD_OAUTH_CLIENT_ID) {
+      const r = "SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_DISCORD_";
+      env[r + "CLIENT_ID"] = env.DISCORD_OAUTH_CLIENT_ID;
+      env[r + "CLIENT_SECRET"] = env.DISCORD_OAUTH_CLIENT_SECRET || "";
+      env[r + "CLIENT_NAME"] = "Discord";
+      env[r + "SCOPE"] = "identify";
+      env[r + "AUTHORIZATION_GRANT_TYPE"] = "authorization_code";
+      env[r + "REDIRECT_URI"] = "{baseUrl}/login/oauth2/code/discord";
+    }
+  }
   return env;
 }
 

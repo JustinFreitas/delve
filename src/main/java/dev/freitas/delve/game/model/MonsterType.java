@@ -16,6 +16,8 @@ import dev.freitas.delve.game.engine.DamageRoll;
  * @param morale           2d6 morale target (B/X: lower flees sooner; 2-12)
  * @param xpValue          XP awarded for defeating one
  * @param numberAppearing  dice expression for how many appear in a dungeon
+ * @param moveRate         dungeon movement rate in feet/turn; used to close missile-combat range each
+ *                         round (encounter movement is conventionally 1/3 of this figure per round)
  */
 public record MonsterType(
         String name,
@@ -25,7 +27,8 @@ public record MonsterType(
         DamageRoll attack,
         int morale,
         int xpValue,
-        String numberAppearing) {
+        String numberAppearing,
+        int moveRate) {
 
     /** This monster's THAC0, derived from its Hit Dice. */
     public int thac0() {

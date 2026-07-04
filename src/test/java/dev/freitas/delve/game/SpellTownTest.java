@@ -61,6 +61,9 @@ class SpellTownTest {
         // If Magic Missile got prepared, casting it should consume the slot and damage the foe.
         if (spells.isMemorized(mu, Spell.MAGIC_MISSILE)) {
             combat.startCombat(save);
+            // Isolate spellcasting from the (separately tested) surprise mechanic, which can otherwise
+            // skip the player's round-1 action depending on the seed.
+            save.getSession().getCombat().setPartySurprised(false);
             int before = save.getSession().getCombat().aliveMonsters().get(0).getCurrentHp();
             combat.castRound(save, Spell.MAGIC_MISSILE, 1);
             boolean damagedOrDead = save.getSession().getCombat() == null

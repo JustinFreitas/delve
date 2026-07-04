@@ -28,6 +28,7 @@ public final class CharacterSheets {
         eb.addField("Abilities", abilitiesBlock(c.getAbilities()), true);
         eb.addField("Saving Throws", savesBlock(c), true);
         eb.addField("XP", c.getXp() + " / " + c.xpForNextLevel(), true);
+        eb.addField("Delves", String.valueOf(c.getDelveCount()), true);
 
         eb.addField("Gold", c.getGold() + " gp", true);
         String armorLine = c.getArmor().displayName() + (c.isShield() ? " + shield" : "");
@@ -40,6 +41,9 @@ public final class CharacterSheets {
         StringBuilder supplies = new StringBuilder();
         supplies.append("Weapon: ").append(c.getMainWeapon()).append(" (").append(c.getMainWeaponDamage()).append(")");
         supplies.append("\nTorches: ").append(c.getTorches());
+        if (c.getLanterns() > 0 || c.getOilFlasks() > 0) {
+            supplies.append("   Lanterns: ").append(c.getLanterns()).append("   Oil flasks: ").append(c.getOilFlasks());
+        }
         if (c.getHealingPotions() > 0) {
             supplies.append("\nHealing potions: ").append(c.getHealingPotions());
         }
@@ -80,7 +84,11 @@ public final class CharacterSheets {
         sb.append("Weapon: ").append(c.getMainWeapon()).append(" (").append(c.getMainWeaponDamage()).append(")\n");
         sb.append("Armor: ").append(c.getArmor().displayName()).append(c.isShield() ? " + shield" : "")
                 .append("   Move ").append(Encumbrance.movementRate(c.getArmor(), heavy)).append("'/turn\n");
+        sb.append("Delves: ").append(c.getDelveCount()).append("\n");
         sb.append("Gold: ").append(c.getGold()).append(" gp   Torches: ").append(c.getTorches());
+        if (c.getLanterns() > 0 || c.getOilFlasks() > 0) {
+            sb.append("   Lanterns: ").append(c.getLanterns()).append("   Oil flasks: ").append(c.getOilFlasks());
+        }
         if (c.getHealingPotions() > 0) {
             sb.append("   Healing potions: ").append(c.getHealingPotions());
         }

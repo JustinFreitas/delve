@@ -1,6 +1,7 @@
 package dev.freitas.delve.game.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import dev.freitas.delve.game.engine.LightSource;
 
 /**
  * The player's live dungeon run: where they are, what turn it is, and how much light remains. Stored
@@ -16,12 +17,27 @@ public class GameSession {
     /** Elapsed B/X dungeon turns (10 minutes each). */
     private int dungeonTurn;
 
-    /** Turns of light left on the current torch; 0 with no torch lit means darkness. */
-    private int torchTurnsRemaining;
+    /** Which kind of light is currently lit, if any; null (with {@link #inDarkness} true) means none. */
+    private LightSource activeLight;
+
+    /** Turns of light left on the current torch/lantern; 0 with none lit means darkness. */
+    private int lightTurnsRemaining;
     private boolean inDarkness;
+
+    /** Who's physically holding the lit torch/lantern: {@link SaveGame#PLAYER_SLOT} or a retainer's
+        name (same token style as {@code marchingOrder}); null if nobody is (or nothing is lit). */
+    private String lightBearer;
 
     /** The active fight, when {@link #state} is {@link SessionState#IN_COMBAT}. */
     private CombatEncounter combat;
+
+    /** Front rank is probing ahead with a 10-foot pole: passive trap detection, but caught with hands
+        off their weapon (AC penalty) if surprised. Resets when a delve begins. */
+    private boolean polingFrontRank;
+
+    /** Dungeon turns elapsed since the party last rested; resets to 0 on {@code rest} and when a
+        delve begins. Six turns (one hour) without resting incurs a fatigue penalty. */
+    private int turnsSinceRest;
 
     public GameSession() {}
 
@@ -80,12 +96,28 @@ public class GameSession {
         this.dungeonTurn = dungeonTurn;
     }
 
-    public int getTorchTurnsRemaining() {
-        return torchTurnsRemaining;
+    public LightSource getActiveLight() {
+        return activeLight;
     }
 
-    public void setTorchTurnsRemaining(int torchTurnsRemaining) {
-        this.torchTurnsRemaining = torchTurnsRemaining;
+    public void setActiveLight(LightSource activeLight) {
+        this.activeLight = activeLight;
+    }
+
+    public int getLightTurnsRemaining() {
+        return lightTurnsRemaining;
+    }
+
+    public void setLightTurnsRemaining(int lightTurnsRemaining) {
+        this.lightTurnsRemaining = lightTurnsRemaining;
+    }
+
+    public String getLightBearer() {
+        return lightBearer;
+    }
+
+    public void setLightBearer(String lightBearer) {
+        this.lightBearer = lightBearer;
     }
 
     public boolean isInDarkness() {
@@ -102,5 +134,28 @@ public class GameSession {
 
     public void setCombat(CombatEncounter combat) {
         this.combat = combat;
+    }
+
+    public boolean isPolingFrontRank() {
+        return polingFrontRank;
+    }
+
+    public void setPolingFrontRank(boolean polingFrontRank) {
+        this.polingFrontRank = polingFrontRank;
+    }
+
+    public int getTurnsSinceRest() {
+        return turnsSinceRest;
+    }
+
+    public void setTurnsSinceRest(int turnsSinceRest) {
+        this.turnsSinceRest = turnsSinceRest;
+    }
+
+    /** Six dungeon turns (one hour) without resting incurs a -1 attack/damage penalty until the
+        party rests. */
+    @JsonIgnore
+    public boolean isFatigued() {
+        return turnsSinceRest >= 6;
     }
 }

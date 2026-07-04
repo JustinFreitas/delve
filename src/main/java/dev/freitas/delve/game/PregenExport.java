@@ -52,6 +52,8 @@ public final class PregenExport {
         root.put("movementRate", Encumbrance.movementRate(c.getArmor(), heavy));
         root.put("gold", c.getGold());
         root.put("torches", c.getTorches());
+        root.put("lanterns", c.getLanterns());
+        root.put("oilFlasks", c.getOilFlasks());
         root.put("healingPotions", c.getHealingPotions());
         root.put("equipment", c.getInventory());
 

@@ -55,6 +55,11 @@ public class DungeonGenerator {
         "a scything blade",
         "a poisoned needle on the latch"
     };
+    private static final String[] TREASURE_TRAPS = {
+        "a poisoned needle in the lock",
+        "a cloud of sleeping gas",
+        "a scything blade under the lid"
+    };
 
     private final Dice dice;
 
@@ -188,8 +193,20 @@ public class DungeonGenerator {
         }
         Room ra = rooms.get(a);
         Room rb = rooms.get(b);
-        ra.getExits().put(d, new Exit(d, b, door, secret));
-        rb.getExits().put(d.opposite(), new Exit(d.opposite(), a, door, secret));
+        Exit forward = new Exit(d, b, door, secret);
+        Exit backward = new Exit(d.opposite(), a, door, secret);
+        // A small independent chance any non-secret corridor hides a trap (proposed default: 1-in-20).
+        if (!secret && dice.d(20) == 1) {
+            String description = TRAPS[dice.d(TRAPS.length) - 1];
+            forward.setTrapped(true);
+            forward.setTrapDescription(description);
+            forward.setTrapDamage(new DamageRoll(1, 6));
+            backward.setTrapped(true);
+            backward.setTrapDescription(description);
+            backward.setTrapDamage(new DamageRoll(1, 6));
+        }
+        ra.getExits().put(d, forward);
+        rb.getExits().put(d.opposite(), backward);
         free.get(a).remove(d);
         free.get(b).remove(d.opposite());
     }
@@ -207,7 +224,9 @@ public class DungeonGenerator {
         }
     }
 
-    /** Moldvay-style stocking: contents on 1d6, then a content-dependent treasure chance. */
+    /** Moldvay-style stocking: contents on 1d6, then a content-dependent treasure chance. Treasure odds
+        are bumped a notch above the strict by-the-book baseline (was 3/2/1-in-6) to keep XP flowing —
+        gold recovered is the main lever for level progression, and it was landing too slowly. */
     private void stock(Room room, int depth) {
         int contents = dice.d(6);
         if (contents <= 2) {
@@ -215,7 +234,7 @@ public class DungeonGenerator {
             MonsterType type = pickMonster(depth);
             room.setMonsterName(type.name());
             room.setMonsterCount(Math.max(1, Math.min(depth + 2, rollNumberAppearing(type.numberAppearing()))));
-            if (dice.d(6) <= 3) {
+            if (dice.d(6) <= 5) {
                 addTreasure(room, depth);
             }
         } else if (contents == 3) {
@@ -223,7 +242,7 @@ public class DungeonGenerator {
             room.setTrapped(true);
             room.setTrapDescription(TRAPS[dice.d(TRAPS.length) - 1]);
             room.setTrapDamage(new DamageRoll(1, 6));
-            if (dice.d(6) <= 2) {
+            if (dice.d(6) <= 4) {
                 addTreasure(room, depth);
             }
         } else if (contents == 4) {
@@ -231,7 +250,7 @@ public class DungeonGenerator {
             room.setSpecialText(SPECIALS[dice.d(SPECIALS.length) - 1]);
         } else {
             room.setContent(ContentType.EMPTY);
-            if (dice.d(6) == 1) {
+            if (dice.d(6) <= 3) {
                 addTreasure(room, depth);
             }
         }
@@ -239,7 +258,25 @@ public class DungeonGenerator {
 
     private void addTreasure(Room room, int depth) {
         room.setHasTreasure(true);
-        room.setTreasureGold(dice.roll(2, 6) * 10 * depth);
+        // Bumped to a higher multiplier to ensure 4-6 delves per level
+        room.setTreasureGold(dice.roll(2, 6) * 30 * depth);
+        
+        // 30% chance of gems
+        if (dice.d(100) <= 30) {
+            room.setTreasureGemsValue(dice.roll(1, 6) * 100 * depth);
+        }
+        // 15% chance of jewelry
+        if (dice.d(100) <= 15) {
+            room.setTreasureJewelryValue(dice.roll(1, 4) * 400 * depth);
+        }
+
+        // A small independent chance any treasure is also guarded by its own trap (proposed default:
+        // 1-in-6), distinct from — and rarer than — the room's own environmental trap above.
+        if (dice.d(6) == 1) {
+            room.setTreasureTrapped(true);
+            room.setTreasureTrapDescription(TREASURE_TRAPS[dice.d(TREASURE_TRAPS.length) - 1]);
+            room.setTreasureTrapDamage(new DamageRoll(1, 4));
+        }
     }
 
     private MonsterType pickMonster(int depth) {
