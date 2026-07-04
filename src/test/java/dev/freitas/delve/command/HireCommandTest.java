@@ -6,6 +6,7 @@ import dev.freitas.delve.game.RetainerFactory;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.RetainerRules;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
@@ -141,6 +142,24 @@ class HireCommandTest {
         assertThat(pc.getGold()).isBetween(
                 goldBefore - 3 * HireCommand.HIRING_FEE + 3 * 3,
                 goldBefore - 3 * HireCommand.HIRING_FEE + 3 * 18);
+    }
+
+    @Test
+    void hireOneDeductsGoldAndSeedsLoyaltyFromTheNamedPayerNotTheFirstRolledPc() {
+        SaveGame save = new SaveGame();
+        Character leader = pc(1000); // low CHA, plenty of gold
+        save.setCharacter(leader);
+        Character charismatic = pc(200);
+        charismatic.setName("Charismatic");
+        charismatic.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 18)); // CHA 18 -> max loyalty adjustment
+        save.addCharacter(charismatic);
+
+        Retainer hired = hireCommand.hireOne(save, charismatic, CharacterClass.FIGHTER, "Test");
+
+        assertThat(hired.getLoyalty()).isEqualTo(RetainerRules.baseLoyalty(18));
+        assertThat(charismatic.getGold()).isLessThan(200); // fee deducted from the named payer...
+        assertThat(leader.getGold()).isEqualTo(1000); // ...not from the party's first-rolled PC
+        assertThat(save.getRetainers()).containsExactly(hired);
     }
 
     private Character pc(int gold) {

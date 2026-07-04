@@ -6,6 +6,7 @@ import dev.freitas.delve.command.PartySummary;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.RetainerRules;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.ContentType;
 import dev.freitas.delve.game.model.Direction;
@@ -63,6 +64,23 @@ class MultiPcCombatTest {
         assertThat(text).contains("Anna");
         assertThat(text).contains("Bram");
         assertThat(text).doesNotContain("(you)"); // only shown when solo
+    }
+
+    @Test
+    void partySummaryShowsTheHighestRetainerCapAcrossEveryPc() {
+        // Any living PC's Charisma can authorize a hire (HireCommand's optional pc-name argument), so
+        // the real reachable ceiling is the max cap across the whole party, not just the first PC's.
+        SaveGame save = new SaveGame();
+        Character lowCha = factory.create("Anna", CharacterClass.FIGHTER, new AbilityScores(16, 9, 9, 13, 13, 3));
+        save.setCharacter(lowCha);
+        Character highCha = factory.create("Bram", CharacterClass.CLERIC, new AbilityScores(9, 9, 9, 9, 9, 18));
+        save.addCharacter(highCha);
+
+        String text = PartySummary.text(save);
+
+        int expectedMax = RetainerRules.maxRetainers(18);
+        assertThat(RetainerRules.maxRetainers(3)).isLessThan(expectedMax); // sanity: Anna alone would be lower
+        assertThat(text).contains("0/" + expectedMax + " (Charisma cap)");
     }
 
     @Test

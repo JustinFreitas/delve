@@ -18,9 +18,12 @@ public final class PartySummary {
     private PartySummary() {}
 
     public static String text(SaveGame save) {
-        // CHA cap keys off the first-rolled PC for now — a real multi-PC pooling rule is a separate
-        // design question, deferred.
-        int max = RetainerRules.maxRetainers(save.getCharacter().getAbilities().score(Ability.CHA));
+        // Any living PC's Charisma can authorize a hire (see HireCommand's optional pc-name argument),
+        // so the party's real reachable ceiling is the highest cap across every living PC, not just the
+        // first-rolled one.
+        int max = save.getCharacters().stream()
+                .mapToInt(c -> RetainerRules.maxRetainers(c.getAbilities().score(Ability.CHA)))
+                .max().orElse(0);
         int width = save.getSession().isInDungeon() ? save.getSession().currentRoom().getCorridorWidth() : 3;
         List<Combatant> fullOrder = save.fullOrder();
         boolean solo = save.getCharacters().size() == 1;

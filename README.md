@@ -225,8 +225,15 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   to make their own gearing choices. A standalone `/outfit [pc-name]` command runs the same auto-gear
   pass against an already-rolled PC — for one made `bare`, one from before this feature existed, or one
   you only partly shopped for by hand.
+- **Milestone 15** — `/hire` supports hiring to a specific PC: an optional leading PC-name argument
+  (`/hire Bram fighter Conan`, matching `/attack`/`/cast`/`/turn`'s existing pattern) says whose gold
+  pays the hiring fee and whose Charisma governs the loyalty roll and the retainer-count cap for that
+  hire — no more being stuck with only the first-rolled PC's Charisma/purse in a multi-PC party. The
+  hired retainer still joins the one shared, party-wide retainer pool afterward (combat, XP, upkeep,
+  desertion are all unchanged). `/party`'s displayed Charisma cap now reflects the highest cap across
+  every living PC, matching the new hiring behavior.
 
-All milestones are complete (218 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+All milestones are complete (220 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
@@ -286,9 +293,11 @@ half-built:
   quaffs a potion?) — its simulation loop threads one PC through every decision today.
 - **The web interface** (`GameFacade`/`StateSnapshot`/`app.js`) still only shows/plays the first PC —
   unaffected by the data-model change, just not updated to expose PC #2+ yet.
-- **Retainer-cap pooling** across multiple PCs' Charisma scores, and switching persisted marching-
-  order/light-bearer tokens from `"@you"` to real PC names once 2+ PCs exist, are both smaller
-  refinements, not blocking.
+- **Retainer ownership**: `/hire` (Milestone 15) lets any PC's Charisma/gold authorize a hire, but
+  retainers still join one shared, undifferentiated party-wide pool afterward — there's no persistent
+  "this retainer belongs to PC X" concept (per-PC upkeep, loyalty/desertion, or `/party` grouping).
+  Switching persisted marching-order/light-bearer tokens from `"@you"` to real PC names once 2+ PCs
+  exist is a separate, smaller refinement, not blocking.
 - **"Mules"** were mentioned as part of the party-size cap but delve has no such entity modeled at all
   yet.
 
@@ -321,7 +330,7 @@ half-built:
 | `/open <dir>` | Open or force a door. |
 | `/attack [n]` | Strike in combat (one round); optionally target enemy #n. |
 | `/flee` | Flee combat to an adjacent room. |
-| `/hire <class> [name]` | Recruit a retainer in town, or bulk-hire with `<class> all` / `smart all` / `all` / `random all`. |
+| `/hire [pc-name] <class> [name]` | Recruit a retainer in town, or bulk-hire with `<class> all` / `smart all` / `all` / `random all`; name a PC first to hire using their gold/Charisma. |
 | `/party` | List your character and retainers (rank, engagement, weapon class). |
 | `/dismiss <name>` | Release a retainer. |
 | `/order [name1 name2 ...]` | View or set your marching order (front to back). |
