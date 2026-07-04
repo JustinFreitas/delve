@@ -9,14 +9,16 @@ import dev.freitas.delve.game.session.ExplorationResult;
 import dev.freitas.delve.game.session.TownService;
 import org.springframework.stereotype.Component;
 
-/** Returns to town to rest, recover, pay upkeep and re-prepare spells: {@code /town}. */
+/** Returns to town to rest, recover, pay upkeep and re-prepare spells: {@code /town [days]}. */
 @Component
 public class TownCommand extends Command {
+
+    private static final int DEFAULT_REST_DAYS = 7;
 
     private final TownService town;
 
     public TownCommand(TownService town) {
-        super("town", "return", "rest");
+        super("town", "return");
         this.town = town;
     }
 
@@ -32,15 +34,27 @@ public class TownCommand extends Command {
             ctx.reply("You can't stroll back to town mid-fight! `flee` first.");
             return;
         }
-        ExplorationResult result = town.returnToTown(save);
+        int days = DEFAULT_REST_DAYS;
+        String arg = ctx.getArgumentText().trim();
+        if (!arg.isBlank()) {
+            try {
+                days = Math.max(1, Integer.parseInt(arg));
+            } catch (NumberFormatException e) {
+                ctx.reply("Number of days must be a number.");
+                return;
+            }
+        }
+        ExplorationResult result = town.returnToTown(save, days);
         ctx.getBeans().gameState.save(userId, save);
         ctx.reply(result.text());
     }
 
     @Override
     public void provideHelp(HelpContext help) {
-        help.addUsage("");
-        help.addDescription("Returns to town: abandons the delve, heals the party to full, pays retainer "
-                + "upkeep, and re-prepares spells.");
+        help.addUsage("[days]");
+        help.addDescription("Returns to town: abandons the delve, rests (1d3 hp/day, default "
+                + DEFAULT_REST_DAYS + " days — a shorter stay heals less), pays retainer upkeep, and "
+                + "re-prepares spells. A retainer who fled a fight has only a 3-in-6 chance of making it "
+                + "back at all.");
     }
 }

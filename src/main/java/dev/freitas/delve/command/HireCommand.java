@@ -120,12 +120,14 @@ public class HireCommand extends Command {
         int loyalty = RetainerRules.baseLoyalty(pc.getAbilities().score(Ability.CHA));
         Retainer retainer = retainerFactory.create(name, cls, 1, loyalty);
 
-        pc.setGold(pc.getGold() - HIRING_FEE);
+        int banked = dice.roll(3, 6);
+        pc.setGold(pc.getGold() - HIRING_FEE + banked);
         save.getRetainers().add(retainer);
         ctx.getBeans().gameState.save(userId, save);
 
         ctx.reply("**" + name + "**, a level 1 " + cls.displayName() + ", joins you for a " + HIRING_FEE
-                + " gp advance (and a half-share of spoils).\n"
+                + " gp advance (and a half-share of spoils), bringing **" + banked + " gp** banked into the "
+                + "party's purse.\n"
                 + name + ": " + retainer.getMaxHp() + " hp, AC " + retainer.armorClass()
                 + ", loyalty " + loyalty + " (" + RetainerRules.loyaltyDescriptor(loyalty) + ").");
     }
@@ -156,7 +158,8 @@ public class HireCommand extends Command {
             int loyalty = RetainerRules.baseLoyalty(pc.getAbilities().score(Ability.CHA));
             Retainer r = retainerFactory.create(name, cls, 1, loyalty);
 
-            pc.setGold(pc.getGold() - HIRING_FEE);
+            int banked = dice.roll(3, 6);
+            pc.setGold(pc.getGold() - HIRING_FEE + banked);
             save.getRetainers().add(r);
             hired.add(r);
         }
@@ -172,15 +175,20 @@ public class HireCommand extends Command {
             return;
         }
         int count = Math.min(slotsAvailable(max, save.getRetainers().size()), affordable);
+        int goldBefore = pc.getGold();
         List<Retainer> hired = bulkHire(save, pc, mode, fixedClass, count);
+        // Fees paid, offset by each retainer's banked coin joining the party's purse.
+        int totalBanked = pc.getGold() - goldBefore + count * HIRING_FEE;
         ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);
-        ctx.reply(formatBulkHireReply(hired, mode, fixedClass, pc.getGold()));
+        ctx.reply(formatBulkHireReply(hired, mode, fixedClass, pc.getGold(), totalBanked));
     }
 
-    private String formatBulkHireReply(List<Retainer> hired, BulkMode mode, CharacterClass fixedClass, int remainingGold) {
+    private String formatBulkHireReply(
+            List<Retainer> hired, BulkMode mode, CharacterClass fixedClass, int remainingGold, int totalBanked) {
         int spent = hired.size() * HIRING_FEE;
         StringBuilder sb = new StringBuilder("Hired **" + hired.size() + "** retainer" + (hired.size() == 1 ? "" : "s")
-                + " (" + modeLabel(mode, fixedClass) + ") for **" + spent + " gp**; " + remainingGold + " gp left.\n```\n");
+                + " (" + modeLabel(mode, fixedClass) + ") for **" + spent + " gp** (offset by **" + totalBanked
+                + " gp** banked from their savings); " + remainingGold + " gp left.\n```\n");
         for (Retainer r : hired) {
             sb.append(String.format("%-16s %-11s %3d hp  AC %d  loyalty %d (%s)%n",
                     r.getName(), r.getCharacterClass().displayName(), r.getMaxHp(), r.armorClass(),

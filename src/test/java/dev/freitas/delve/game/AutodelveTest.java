@@ -25,7 +25,7 @@ class AutodelveTest {
         SpellService spells = new SpellService(dice);
         CombatService combat = new CombatService(dice, spells);
         ExplorationService exploration = new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService());
-        TownService town = new TownService(spells);
+        TownService town = new TownService(spells, dice);
         return new AutodelveService(dice, exploration, combat, town);
     }
 

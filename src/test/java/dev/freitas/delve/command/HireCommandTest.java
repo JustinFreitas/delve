@@ -75,12 +75,13 @@ class HireCommandTest {
 
         List<Retainer> hired = command.bulkHire(save, pc, HireCommand.BulkMode.RANDOM, null, 5);
 
-        // Regression-locked against seed 11: the class roll, name-pool roll, and the hit-die roll
-        // inside retainerFactory.create(...) all interleave on the same Dice, so this exact sequence
-        // is only reproducible by re-running the real bulkHire path (not by hand-simulating the rolls).
+        // Regression-locked against seed 11: the class roll, name-pool roll, banked-gold roll, and the
+        // hit-die roll inside retainerFactory.create(...) all interleave on the same Dice, so this exact
+        // sequence is only reproducible by re-running the real bulkHire path (not by hand-simulating the
+        // rolls).
         assertThat(hired.stream().map(Retainer::getCharacterClass).collect(Collectors.toList()))
-                .containsExactly(CharacterClass.FIGHTER, CharacterClass.THIEF, CharacterClass.CLERIC,
-                        CharacterClass.FIGHTER, CharacterClass.HALFLING);
+                .containsExactly(CharacterClass.FIGHTER, CharacterClass.HALFLING, CharacterClass.CLERIC,
+                        CharacterClass.ELF, CharacterClass.HALFLING);
     }
 
     @Test
@@ -113,7 +114,8 @@ class HireCommandTest {
         List<Retainer> goldLimitedHires =
                 hireCommand.bulkHire(goldLimited, poorPc, HireCommand.BulkMode.SMART, null, goldLimitedCount);
         assertThat(goldLimitedHires).hasSize(2);
-        assertThat(poorPc.getGold()).isEqualTo(10); // 60 - 2*25
+        // 60 - 2*25 = 10, plus each hire's 3d6 banked gold (3-18 per hire) joining the party's purse.
+        assertThat(poorPc.getGold()).isBetween(10 + 2 * 3, 10 + 2 * 18);
 
         SaveGame slotLimited = new SaveGame();
         Character richPc = pc(1000);
@@ -122,7 +124,23 @@ class HireCommandTest {
         List<Retainer> slotLimitedHires =
                 hireCommand.bulkHire(slotLimited, richPc, HireCommand.BulkMode.SMART, null, slotLimitedCount);
         assertThat(slotLimitedHires).hasSize(2);
-        assertThat(richPc.getGold()).isEqualTo(950); // 1000 - 2*25
+        // 1000 - 2*25 = 950, plus each hire's 3d6 banked gold (3-18 per hire) joining the party's purse.
+        assertThat(richPc.getGold()).isBetween(950 + 2 * 3, 950 + 2 * 18);
+    }
+
+    @Test
+    void bulkHireBanksEachRetainersStartingGoldIntoThePartysPurse() {
+        SaveGame save = new SaveGame();
+        Character pc = pc(1000);
+        save.setCharacter(pc);
+        int goldBefore = pc.getGold();
+
+        hireCommand.bulkHire(save, pc, HireCommand.BulkMode.SMART, null, 3);
+
+        // Net change: -3*HIRING_FEE (fees paid) + banked gold (3-18 per hire, 3 hires).
+        assertThat(pc.getGold()).isBetween(
+                goldBefore - 3 * HireCommand.HIRING_FEE + 3 * 3,
+                goldBefore - 3 * HireCommand.HIRING_FEE + 3 * 18);
     }
 
     private Character pc(int gold) {

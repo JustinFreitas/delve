@@ -1,5 +1,6 @@
 package dev.freitas.delve.game.session;
 
+import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
@@ -9,22 +10,33 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
- * The town interlude between delves: abandon the dungeon, heal the party to full over a week's rest,
- * pay retainer upkeep, and re-prepare spells. This is the B/X loop of returning to safety to recover
- * and re-supply before descending again.
+ * The town interlude between delves: abandon the dungeon, roll survival for anyone who fled, rest the
+ * party (1d3 hp/day, capped at max), pay retainer upkeep, and re-prepare spells. This is the B/X loop of
+ * returning to safety to recover and re-supply before descending again.
  */
 @Service
 public class TownService {
 
     private static final int RETAINER_UPKEEP = 10; // gp per retainer for a week in town
+    private static final int DEFAULT_REST_DAYS = 7;
+
+    /** A hired helper who fled a dungeon has only a 3-in-6 chance of making it back to town at all. */
+    private static final int FLEE_SURVIVAL_CHANCE = 3;
 
     private final SpellService spells;
+    private final Dice dice;
 
-    public TownService(SpellService spells) {
+    public TownService(SpellService spells, Dice dice) {
         this.spells = spells;
+        this.dice = dice;
     }
 
+    /** As {@link #returnToTown(SaveGame, int)}, resting the default (a full week). */
     public ExplorationResult returnToTown(SaveGame save) {
+        return returnToTown(save, DEFAULT_REST_DAYS);
+    }
+
+    public ExplorationResult returnToTown(SaveGame save, int restDays) {
         Character c = save.getCharacter();
         ExplorationResult result = new ExplorationResult();
 
@@ -34,15 +46,33 @@ public class TownService {
         save.getSession().setCombat(null);
         result.add(wasDelving
                 ? "You make the long climb back to the surface and return to town."
-                : "You spend a quiet week in town.");
+                : "You spend some time in town.");
 
-        // Full rest heals the whole party.
-        c.setCurrentHp(c.getMaxHp());
+        // A retainer who fled a fight only has a 3-in-6 chance of actually making it back.
+        List<Retainer> lost = new ArrayList<>();
         for (Retainer r : save.getRetainers()) {
-            r.setCurrentHp(r.getMaxHp());
-            r.setFled(false);
+            if (r.isFled()) {
+                if (dice.d(6) <= FLEE_SURVIVAL_CHANCE) {
+                    r.setFled(false);
+                    result.add(r.getName() + " stumbles back into the fold, shaken but alive.");
+                } else {
+                    lost.add(r);
+                    result.add(r.getName() + " never made it back — presumed dead.");
+                }
+            }
         }
-        result.add("The party rests and recovers to full health.");
+        save.getRetainers().removeAll(lost);
+
+        // Rest heals 1d3 hp per full day, capped at max — not an instant full heal.
+        int days = Math.max(1, restDays);
+        for (int i = 0; i < days; i++) {
+            healOneDay(c);
+            for (Retainer r : save.getRetainers()) {
+                healOneDay(r);
+            }
+        }
+        result.add("After " + days + " day" + (days == 1 ? "" : "s") + " of rest, " + c.getName()
+                + " is at " + c.getCurrentHp() + "/" + c.getMaxHp() + " hp.");
 
         // Retainer upkeep.
         int upkeep = save.getRetainers().size() * RETAINER_UPKEEP;
@@ -72,5 +102,12 @@ public class TownService {
             result.add("You re-prepare spells: " + String.join(", ", prepared) + ".");
         }
         return result;
+    }
+
+    private void healOneDay(dev.freitas.delve.game.engine.Combatant c) {
+        if (c.getCurrentHp() >= c.getMaxHp() || c.getCurrentHp() <= 0) {
+            return;
+        }
+        c.setCurrentHp(Math.min(c.getMaxHp(), c.getCurrentHp() + dice.roll(1, 3)));
     }
 }

@@ -33,7 +33,7 @@ class SpellTownTest {
     private final Dice dice = new Dice(new Random(31));
     private final SpellService spells = new SpellService(dice);
     private final CombatService combat = new CombatService(dice, spells);
-    private final TownService town = new TownService(spells);
+    private final TownService town = new TownService(spells, dice);
     private final CharacterFactory factory = new CharacterFactory(dice);
     private final RetainerFactory retainerFactory = new RetainerFactory(dice);
 
@@ -125,6 +125,7 @@ class SpellTownTest {
         save.setCharacter(mu);
 
         Retainer hench = retainerFactory.create("Bryn", CharacterClass.FIGHTER, 1, 9);
+        hench.setMaxHp(6); // small, known gap so the default week of rest is guaranteed to cap it
         hench.setCurrentHp(1);
         save.getRetainers().add(hench);
         // Put the party in a dungeon to prove /town abandons it.
@@ -132,14 +133,81 @@ class SpellTownTest {
         save.getSession().setState(SessionState.EXPLORING);
 
         int goldBefore = mu.getGold();
-        town.returnToTown(save);
+        town.returnToTown(save); // defaults to a full week's rest
 
         assertThat(save.getSession().getState()).isEqualTo(SessionState.IN_TOWN);
         assertThat(save.getSession().getDungeon()).isNull();
+        // A week of rest (min 1 hp/day) guarantees at least +7 hp — enough to cap both at max from a
+        // 5-hp gap, unlike a single short stay (see restDaysPartiallyHealAShortStay below).
         assertThat(mu.getCurrentHp()).isEqualTo(mu.getMaxHp());
         assertThat(hench.getCurrentHp()).isEqualTo(hench.getMaxHp());
         assertThat(mu.getGold()).isEqualTo(goldBefore - 10); // one retainer's upkeep
         assertThat(mu.getMemorizedSpells()).isNotEmpty(); // spells re-prepared
+    }
+
+    @Test
+    void restDaysPartiallyHealAShortStay() {
+        // A single day's rest (1d3 hp) should almost never fully close a large HP gap.
+        int trials = 200;
+        int fullyHealed = 0;
+        for (int seed = 0; seed < trials; seed++) {
+            Dice localDice = new Dice(new Random(seed));
+            TownService localTown = new TownService(new SpellService(localDice), localDice);
+            SaveGame save = new SaveGame();
+            Character hero = new CharacterFactory(localDice)
+                    .create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
+            hero.setMaxHp(50);
+            hero.setCurrentHp(1);
+            save.setCharacter(hero);
+
+            localTown.returnToTown(save, 1);
+            if (hero.getCurrentHp() >= hero.getMaxHp()) {
+                fullyHealed++;
+            }
+        }
+        assertThat(fullyHealed).isZero(); // 1d3 can never close a 49-hp gap in one day
+    }
+
+    @Test
+    void manyRestDaysEventuallyCapAtMaxHp() {
+        SaveGame save = new SaveGame();
+        Character hero = factory.create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
+        hero.setMaxHp(6);
+        hero.setCurrentHp(1);
+        save.setCharacter(hero);
+
+        town.returnToTown(save, 10); // way more than the 5-hp gap needs even at 1 hp/day
+
+        assertThat(hero.getCurrentHp()).isEqualTo(hero.getMaxHp());
+    }
+
+    @Test
+    void fledRetainersRiskPermanentLossOnReturnToTown() {
+        // Statistical: a fled retainer has only a 3-in-6 chance of making it back; across many seeds
+        // both outcomes (survives, lost for good) should occur.
+        int survived = 0;
+        int lost = 0;
+        for (int seed = 0; seed < 100; seed++) {
+            Dice localDice = new Dice(new Random(seed));
+            TownService localTown = new TownService(new SpellService(localDice), localDice);
+            SaveGame save = new SaveGame();
+            Character hero = new CharacterFactory(localDice)
+                    .create("Hero", CharacterClass.FIGHTER, new AbilityScores(12, 9, 9, 12, 12, 9));
+            save.setCharacter(hero);
+            Retainer coward = new RetainerFactory(localDice).create("Mott", CharacterClass.THIEF, 1, 7);
+            coward.setFled(true);
+            save.getRetainers().add(coward);
+
+            localTown.returnToTown(save, 1);
+            if (save.getRetainers().contains(coward)) {
+                assertThat(coward.isFled()).isFalse(); // survivors rejoin, no longer sitting out
+                survived++;
+            } else {
+                lost++;
+            }
+        }
+        assertThat(survived).isGreaterThan(0);
+        assertThat(lost).isGreaterThan(0);
     }
 
     @Test
