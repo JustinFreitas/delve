@@ -222,7 +222,9 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   few torches for light, using the same `GearCatalog` prices `/buy` does. Common flavor gear (rope,
   rations, a backpack) is skipped since it has no mechanical effect. A trailing `bare` token (e.g.
   `/roll-character fighter Bob bare`) opts back into the old manual-shopping flow for players who want
-  to make their own gearing choices.
+  to make their own gearing choices. A standalone `/outfit [pc-name]` command runs the same auto-gear
+  pass against an already-rolled PC — for one made `bare`, one from before this feature existed, or one
+  you only partly shopped for by hand.
 
 All milestones are complete (218 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
@@ -309,6 +311,7 @@ half-built:
 | `/ping` | Liveness check + gateway latency. |
 | `/help` `[command]` | List commands, or detailed help for one. |
 | `/roll-character <class> [name] [bare]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling); auto-gears with a class-appropriate kit by default, or `bare` to shop for yourself with `/buy`. |
+| `/outfit [pc-name]` | Best-effort auto-gear an already-rolled PC (town only) — the same thing `/roll-character` does by default. |
 | `/sheet` | Show your current character sheet. |
 | `/enter [module]` | Begin a delve — procedural, or run an authored module by name. |
 | `/loadmodule` | List authored modules available to `/enter`. |
