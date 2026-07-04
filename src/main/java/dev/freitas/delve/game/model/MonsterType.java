@@ -18,6 +18,8 @@ import dev.freitas.delve.game.engine.DamageRoll;
  * @param numberAppearing  dice expression for how many appear in a dungeon
  * @param moveRate         dungeon movement rate in feet/turn; used to close missile-combat range each
  *                         round (encounter movement is conventionally 1/3 of this figure per round)
+ * @param effect           what a hit does beyond normal damage (e.g. {@link AttackEffect#DRAIN});
+ *                         {@code attack} is unused/nominal for non-{@code NORMAL} effects
  */
 public record MonsterType(
         String name,
@@ -28,7 +30,8 @@ public record MonsterType(
         int morale,
         int xpValue,
         String numberAppearing,
-        int moveRate) {
+        int moveRate,
+        AttackEffect effect) {
 
     /** This monster's THAC0, derived from its Hit Dice. */
     public int thac0() {

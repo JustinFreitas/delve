@@ -2,6 +2,7 @@ package dev.freitas.delve.game.session;
 
 import dev.freitas.delve.game.Bestiary;
 import dev.freitas.delve.game.engine.Ability;
+import dev.freitas.delve.game.engine.Advanceable;
 import dev.freitas.delve.game.engine.AttackResolver;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.DamageRoll;
@@ -9,10 +10,13 @@ import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Leveling;
 import dev.freitas.delve.game.engine.RangeBand;
+import dev.freitas.delve.game.engine.ReactionTier;
+import dev.freitas.delve.game.engine.SavingThrows;
 import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.engine.WeaponCatalog;
 import dev.freitas.delve.game.engine.WeaponCatalog.WeaponProfile;
 import dev.freitas.delve.game.engine.WeaponClass;
+import dev.freitas.delve.game.model.AttackEffect;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.CombatEncounter;
 import dev.freitas.delve.game.model.Exit;
@@ -44,13 +48,26 @@ public class CombatService {
         this.spells = spells;
     }
 
-    /** B/X reaction: undead are mindlessly hostile; otherwise 2d6 + CHA modifier, hostile on 8 or less. */
-    public boolean isHostileReaction(Character character, MonsterType type) {
+    /** B/X reaction: undead always attack; otherwise the 5-tier 2d6 + CHA modifier table (only 5 or
+        less is hostile — most encounters are avoidable, per the house rule). */
+    public ReactionTier reaction(Character character, MonsterType type) {
         if (isUndead(type)) {
-            return true;
+            return ReactionTier.ATTACKS;
         }
-        int reaction = dice.roll2d6() + character.getAbilities().modifier(Ability.CHA);
-        return reaction <= 8;
+        int roll = dice.roll2d6() + character.getAbilities().modifier(Ability.CHA);
+        if (roll <= 2) {
+            return ReactionTier.ATTACKS;
+        }
+        if (roll <= 5) {
+            return ReactionTier.HOSTILE;
+        }
+        if (roll <= 8) {
+            return ReactionTier.UNCERTAIN;
+        }
+        if (roll <= 11) {
+            return ReactionTier.INDIFFERENT;
+        }
+        return ReactionTier.FRIENDLY;
     }
 
     /** Rolls the monster group's hit points, surprise, and starting range; enters combat in the room. */
@@ -200,7 +217,7 @@ public class CombatService {
             return defeat(save, result);
         }
         loyaltyChecks(save, result);
-        checkMorale(encounter, result);
+        checkMorale(save, encounter, result);
         if (encounter.isOver()) {
             return victory(save, result, verbose);
         }
@@ -418,7 +435,12 @@ public class CombatService {
             int targetAc = target.armorClass() + polingSurpriseAcPenalty(save, encounter, width, target);
             var outcome = AttackResolver.resolve(dice.d20(), 0, type.thac0(), targetAc);
             String victim = (target instanceof Character) ? "you" : target.getName();
-            if (outcome.hit()) {
+            if (outcome.hit() && type.effect() == AttackEffect.DRAIN) {
+                applyDrain(target, result);
+                if (target instanceof Character && !character.isAlive()) {
+                    return;
+                }
+            } else if (outcome.hit()) {
                 int damage = type.attack().roll(dice);
                 target.setCurrentHp(target.getCurrentHp() - damage);
                 result.add("The " + type.name().toLowerCase() + " hits " + victim + " for " + damage + " damage"
@@ -429,6 +451,39 @@ public class CombatService {
             } else {
                 result.add("The " + type.name().toLowerCase() + " misses " + victim + ".");
             }
+        }
+    }
+
+    /** Energy drain: a level-2+ combatant simply loses a level ({@link Leveling#drainLevel}); a
+        level-1 combatant instead risks death outright — a save vs. Death that succeeds leaves them
+        alive at level 1 with 2 HP and (if a spellcaster) no prepared spells, "reduced to a shell of
+        themself"; failure kills them. Restoring drained levels needs a safe-haven rest and isn't
+        modeled yet — drains are permanent for now. */
+    private void applyDrain(Combatant target, ExplorationResult result) {
+        if (!(target instanceof Advanceable adv)) {
+            return;
+        }
+        String who = (target instanceof Character) ? "You" : adv.getName();
+        if (adv.getLevel() > 1) {
+            result.add(Leveling.drainLevel(adv, dice));
+            return;
+        }
+        int saveTarget = SavingThrows.forCharacter(adv.getCharacterClass(), adv.getLevel()).deathPoison();
+        boolean saved = dice.d20() >= saveTarget;
+        if (saved) {
+            adv.setMaxHp(2);
+            adv.setCurrentHp(2);
+            if (target instanceof Character character) {
+                character.getMemorizedSpells().clear();
+            }
+            result.add(who + " " + (target instanceof Character ? "barely survive" : "barely survives")
+                    + " the drain, reduced to a shell of " + (target instanceof Character ? "your" : "their")
+                    + " former self (2 hp, no spells or special abilities).");
+        } else {
+            adv.setCurrentHp(0);
+            result.add(who + " " + (target instanceof Character ? "fail" : "fails")
+                    + " the saving throw and " + (target instanceof Character ? "die" : "dies")
+                    + " from the drain!");
         }
     }
 
@@ -453,7 +508,7 @@ public class CombatService {
 
     /** B/X morale: checked exactly once at each of two triggers — the first casualty, and again once
         the group is reduced to half or fewer of its starting number — not every round thereafter. */
-    private void checkMorale(CombatEncounter encounter, ExplorationResult result) {
+    private void checkMorale(SaveGame save, CombatEncounter encounter, ExplorationResult result) {
         if (encounter.isMoraleBroken() || encounter.getInitialCount() <= 1) {
             return;
         }
@@ -473,10 +528,36 @@ public class CombatService {
             return;
         }
         MonsterType type = encounter.aliveMonsters().get(0).getType();
-        if (dice.roll2d6() > type.morale()) {
+        int modifier = situationalMoraleModifier(save, encounter);
+        if (dice.roll2d6() > type.morale() + modifier) {
             encounter.setMoraleBroken(true);
             result.add("The surviving " + type.name().toLowerCase() + "s break and flee!");
         }
+    }
+
+    /** A rough automated stand-in for the house rule's "referee may apply -1/+1 based on the situation":
+        compares each side's proportional HP loss so far — the monsters break easier if they're clearly
+        worse off than the party, and hold longer if they're clearly ahead. */
+    private int situationalMoraleModifier(SaveGame save, CombatEncounter encounter) {
+        double monsterLoss = 1.0 - (double) encounter.aliveMonsters().size() / encounter.getInitialCount();
+        double partyLoss = partyHpLossRatio(save);
+        if (monsterLoss - partyLoss > 0.25) {
+            return -1; // monsters clearly worse off: break easier
+        }
+        if (partyLoss - monsterLoss > 0.25) {
+            return 1; // monsters clearly ahead: hold longer
+        }
+        return 0;
+    }
+
+    private double partyHpLossRatio(SaveGame save) {
+        int maxTotal = 0;
+        int curTotal = 0;
+        for (Combatant c : save.fullOrder()) {
+            maxTotal += c.getMaxHp();
+            curTotal += Math.max(0, c.getCurrentHp());
+        }
+        return maxTotal == 0 ? 0 : 1.0 - (double) curTotal / maxTotal;
     }
 
     private ExplorationResult victory(SaveGame save, ExplorationResult result, boolean verbose) {
@@ -615,6 +696,6 @@ public class CombatService {
 
     private boolean isUndead(MonsterType type) {
         String n = type.name().toLowerCase();
-        return n.equals("skeleton") || n.equals("zombie");
+        return n.equals("skeleton") || n.equals("zombie") || n.equals("wight");
     }
 }

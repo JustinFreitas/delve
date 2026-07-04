@@ -9,6 +9,7 @@ import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Leveling;
 import dev.freitas.delve.game.engine.LightSource;
+import dev.freitas.delve.game.engine.ReactionTier;
 import dev.freitas.delve.game.engine.SavingThrows;
 import dev.freitas.delve.game.engine.ThiefSkills;
 import dev.freitas.delve.game.model.Character;
@@ -566,18 +567,23 @@ public class ExplorationService {
         MonsterType type = Bestiary.byName(room.getMonsterName());
         result.add("");
         MonsterDisposition scripted = room.getScriptedDisposition();
-        boolean hostile = scripted != null
-                ? scripted == MonsterDisposition.HOSTILE
-                : combat.isHostileReaction(save.getCharacter(), type);
+        ReactionTier reaction = scripted == null ? combat.reaction(save.getCharacter(), type) : null;
+        boolean hostile = scripted != null ? scripted == MonsterDisposition.HOSTILE : reaction.isHostile();
         if (hostile) {
             result.getLines().addAll(combat.startCombat(save).getLines());
         } else {
             String plural = room.getMonsterName().toLowerCase() + (room.getMonsterCount() > 1 ? "s" : "");
-            if (scripted == MonsterDisposition.FRIENDLY) {
-                result.add("The " + plural + " seem friendly and let you pass. (`attack` to fight anyway, or move on.)");
+            String flavor;
+            if (scripted == MonsterDisposition.FRIENDLY || reaction == ReactionTier.FRIENDLY) {
+                flavor = "seem friendly and let you pass";
+            } else if (reaction == ReactionTier.INDIFFERENT) {
+                flavor = "seem indifferent and let you pass";
+            } else if (reaction == ReactionTier.UNCERTAIN) {
+                flavor = "eye you uncertainly, unsure what to make of you";
             } else {
-                result.add("The " + plural + " watch you warily but do not attack yet. (`attack` to fight, or move on.)");
+                flavor = "watch you warily but do not attack yet";
             }
+            result.add("The " + plural + " " + flavor + ". (`attack` to fight, or move on.)");
         }
     }
 

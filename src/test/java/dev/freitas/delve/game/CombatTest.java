@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Leveling;
+import dev.freitas.delve.game.engine.ReactionTier;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Direction;
 import dev.freitas.delve.game.model.DoorState;
@@ -31,8 +32,20 @@ class CombatTest {
     void undeadAreAlwaysHostile() {
         Character c = factory.create("Cleric", CharacterClass.CLERIC, new AbilityScores(10, 10, 13, 10, 12, 18));
         // Even with maximum charisma, skeletons and zombies attack.
-        assertThat(combat.isHostileReaction(c, Bestiary.SKELETON)).isTrue();
-        assertThat(combat.isHostileReaction(c, Bestiary.ZOMBIE)).isTrue();
+        assertThat(combat.reaction(c, Bestiary.SKELETON)).isEqualTo(ReactionTier.ATTACKS);
+        assertThat(combat.reaction(c, Bestiary.ZOMBIE)).isEqualTo(ReactionTier.ATTACKS);
+    }
+
+    @Test
+    void reactionRollProducesAllFiveTiersAcrossManyTrials() {
+        // A middling-CHA character rolling many times against a non-undead monster should eventually
+        // land in every tier — proves the 2d6+CHA bucketing actually reaches all five bands.
+        Character c = factory.create("Hero", CharacterClass.FIGHTER, new AbilityScores(10, 10, 10, 10, 10, 10));
+        var seen = java.util.EnumSet.noneOf(ReactionTier.class);
+        for (int i = 0; i < 500; i++) {
+            seen.add(combat.reaction(c, Bestiary.ORC));
+        }
+        assertThat(seen).containsExactlyInAnyOrder(ReactionTier.values());
     }
 
     @Test

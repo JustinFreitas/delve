@@ -144,7 +144,7 @@ class EngineTest {
         assertThat(Bestiary.byName("orc")).isEqualTo(Bestiary.ORC);
         assertThat(Bestiary.byName("Goblin")).isEqualTo(Bestiary.GOBLIN);
         assertThat(Bestiary.byName("dragon")).isNull();
-        assertThat(Bestiary.all()).hasSize(9);
+        assertThat(Bestiary.all()).hasSize(10);
     }
 
     // --- Damage ------------------------------------------------------------

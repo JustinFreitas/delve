@@ -66,6 +66,27 @@ public final class Leveling {
         return messages;
     }
 
+    /**
+     * Energy drain: permanently drops one level, rolling off one hit die of HP and resetting XP to the
+     * new (lower) level's threshold so it isn't immediately regained by the next XP award. THAC0 and
+     * saving throws need no separate adjustment — both are already looked up live from
+     * {@code (characterClass, level)} everywhere they're used. A spellcaster's prepared spells are lost;
+     * they'll simply re-prepare fewer next time, capped by the new level's slot table. Draining a
+     * level-1 combatant instead risks death — see {@code CombatService}'s save-vs-death handling, which
+     * calls this only for level 2+.
+     */
+    public static String drainLevel(Advanceable c, Dice dice) {
+        int loss = dice.d(c.getCharacterClass().hitDie());
+        c.setLevel(c.getLevel() - 1);
+        c.setMaxHp(Math.max(1, c.getMaxHp() - loss));
+        c.setCurrentHp(Math.min(c.getCurrentHp(), c.getMaxHp()));
+        c.setXp(Advancement.xpForLevel(c.getCharacterClass(), c.getLevel()));
+        if (c instanceof dev.freitas.delve.game.model.Character character) {
+            character.getMemorizedSpells().clear();
+        }
+        return c.getName() + " is drained of a level! Now level " + c.getLevel() + " (-" + loss + " HP).";
+    }
+
     private static int hitPointGain(Advanceable c, Dice dice) {
         CharacterClass cls = c.getCharacterClass();
         if (c.getLevel() <= 9) {

@@ -71,6 +71,37 @@ class MoraleTriggerTest {
         assertThat(encounter.isHalfLossChecked()).isTrue();
     }
 
+    @Test
+    void aBadlyBloodiedPartyMakesMonstersBreakLessOften() {
+        // Same monster losses (half dead) either way; only the party's own HP differs. A healthy party
+        // should make the modifier favor the monsters breaking; a badly bloodied party should make them
+        // hold on longer.
+        int brokenWhenPartyHealthy = 0;
+        int brokenWhenPartyBloodied = 0;
+        int trials = 200;
+        for (int seed = 0; seed < trials; seed++) {
+            brokenWhenPartyHealthy += moraleBrokeWithPartyAt(seed, 300) ? 1 : 0;
+            brokenWhenPartyBloodied += moraleBrokeWithPartyAt(seed, 20) ? 1 : 0;
+        }
+        assertThat(brokenWhenPartyBloodied).isLessThan(brokenWhenPartyHealthy);
+    }
+
+    private boolean moraleBrokeWithPartyAt(long seed, int currentHp) {
+        Dice localDice = new Dice(new Random(seed));
+        CombatService localCombat = new CombatService(localDice, new SpellService(localDice));
+        SaveGame save = combatSave(Bestiary.GOBLIN, 2, 300);
+        save.getCharacter().setCurrentHp(currentHp);
+
+        localCombat.startCombat(save);
+        CombatEncounter encounter = save.getSession().getCombat();
+        encounter.setDistanceFeet(0);
+        encounter.setPartySurprised(false);
+        encounter.getMonsters().get(0).takeDamage(999); // 1 of 2 dead: triggers first+half-loss at once
+
+        localCombat.attackRound(save, null);
+        return encounter.isMoraleBroken();
+    }
+
     private SaveGame combatSave(MonsterType type, int count, int heroHp) {
         Character hero = factory.create("Hero", CharacterClass.FIGHTER, new AbilityScores(16, 9, 9, 13, 13, 12));
         hero.setMaxHp(heroHp);
