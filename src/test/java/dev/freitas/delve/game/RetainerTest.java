@@ -103,7 +103,9 @@ class RetainerTest {
     void disloyalRetainersDesertWhenThePartyFlees() {
         // Desertion is only ever at risk after a genuinely bad fight, and only for a retainer who'd
         // already broken (fled=true, e.g. from being bloodied earlier this delve) — simulate both here.
-        SaveGame save = combatSave(Bestiary.GIANT_RAT, 1);
+        // Stirge (encounter rate 10) is slower than the test hero's Chain Mail (encounter rate 20), so
+        // fleeing is deterministic here — these tests are about desertion mechanics, not evasion.
+        SaveGame save = combatSave(Bestiary.STIRGE, 1);
         save.getCharacter().setCurrentHp(save.getCharacter().getMaxHp() / 5); // bloodied: catastrophic gate
         Retainer coward = retainerFactory.create("Mott", CharacterClass.THIEF, 1, 0); // loyalty 0 -> always deserts
         coward.setMaxHp(30);
@@ -119,7 +121,9 @@ class RetainerTest {
 
     @Test
     void loyalRetainersStayThroughARout() {
-        SaveGame save = combatSave(Bestiary.GIANT_RAT, 1);
+        // Stirge (encounter rate 10) is slower than the test hero's Chain Mail (encounter rate 20), so
+        // fleeing is deterministic here — these tests are about desertion mechanics, not evasion.
+        SaveGame save = combatSave(Bestiary.STIRGE, 1);
         save.getCharacter().setCurrentHp(save.getCharacter().getMaxHp() / 5); // bloodied: catastrophic gate
         Retainer stalwart = retainerFactory.create("Gwen", CharacterClass.FIGHTER, 1, 12); // never fails morale
         stalwart.setMaxHp(40);
@@ -137,7 +141,9 @@ class RetainerTest {
     void untouchedRetainersJustRetreatWithoutRiskingDesertion() {
         // The bug this guards against: fleeing a barely-started fight (nobody hurt, nobody already
         // broken) must never roll desertion at all, no matter how disloyal a retainer is.
-        SaveGame save = combatSave(Bestiary.GIANT_RAT, 1);
+        // Stirge (encounter rate 10) is slower than the test hero's Chain Mail (encounter rate 20), so
+        // fleeing is deterministic here — these tests are about desertion mechanics, not evasion.
+        SaveGame save = combatSave(Bestiary.STIRGE, 1);
         Retainer coward = retainerFactory.create("Mott", CharacterClass.THIEF, 1, 0); // loyalty 0
         coward.setMaxHp(30);
         coward.setCurrentHp(30);

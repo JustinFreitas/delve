@@ -92,7 +92,9 @@ class CombatTest {
 
     @Test
     void fleeingLeavesCombatForAnAdjacentRoom() {
-        SaveGame save = combatSave(Bestiary.GIANT_RAT, 1, 60);
+        // Stirge (encounter rate 10) is slower than the test hero's Chain Mail (encounter rate 20), so
+        // fleeing is deterministic here — evasion odds are covered separately in EvasionTest.
+        SaveGame save = combatSave(Bestiary.STIRGE, 1, 60);
         combat.startCombat(save);
         assertThat(save.getSession().getCurrentRoomId()).isEqualTo(0);
 

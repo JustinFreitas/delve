@@ -202,7 +202,7 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
     with the same party listing `/party` shows (rank, hands, light-bearer status for the PC and every
     retainer) — extracted into a shared `PartySummary` so both commands render it identically.
 
-All milestones are complete (186 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+All milestones are complete (192 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
@@ -211,7 +211,13 @@ for the roadmap.
   (5-tier reaction table, energy drain via a new Wight monster, situational morale modifiers), retainer
   stakes & downtime economy (permadeath on flee, multi-day `/town [days]` rest at 1d3 hp/day, retainer
   starting gold), and character/class fixes (dual-prime-requisite XP averaging, a hit-die reroll floor,
-  Thief backstab, Cleric `/turn` undead).
+  Thief backstab, Cleric `/turn` undead). Two more items were picked up afterward from the deferred
+  backlog below: two-weapon fighting (`/wield offhand <item>`/`unoffhand` grants +1 to melee attack, no
+  extra attack/damage — "no shield while dual-wielding" falls out of the existing two-hands budget for
+  free) and evasion/pursuit on `/flee` (the fleeing side auto-escapes if faster than the pursuer, per
+  `Encumbrance`'s existing encounter-movement-rate math vs. `MonsterType.moveRate()` — no new
+  movement-rate field needed after all; failing to be faster gets one flat 2-in-6 chance to still shake
+  them, standing in for the rulebook's separate obstacle/dropped-loot/line-of-sight checks).
 
 ### Known gaps (house rules not yet ported)
 
@@ -219,9 +225,9 @@ Each pass above deliberately deferred anything needing a subsystem delve doesn't
 half-build it:
 - **Doors**: swing-shut-behind-you, a spike/wedge command, one-way doors — needs new `Exit`/`DoorState`
   states plus module-authoring support.
-- **Combat**: evasion/pursuit on flee (movement rates, running exhaustion — PCs/retainers have no
-  movement-rate field at all), two-weapon fighting (no dual-wield equipment slot), attacking from behind
-  (no flanking/facing concept in `Formation`).
+- **Combat**: attacking from behind (no flanking/facing concept in `Formation`); evasion's own running-
+  exhaustion and obstacle/dropped-loot/line-of-sight sub-rules (see above — folded into one flat roll
+  instead of modeled individually).
 - **Economy**: a sell/haggle command (no item-price model exists anywhere), Inn-tier resting costs and
   generosity-tier hiring, treasure storage, magical research, rune transferring — the last few have
   nothing to act on since delve has no magic-item system beyond healing potions.

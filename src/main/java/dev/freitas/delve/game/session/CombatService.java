@@ -7,6 +7,7 @@ import dev.freitas.delve.game.engine.AttackResolver;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.DamageRoll;
+import dev.freitas.delve.game.engine.Encumbrance;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Leveling;
@@ -691,6 +692,15 @@ public class CombatService {
             result.add("There is no open way out — you must keep fighting!");
             return result;
         }
+
+        List<Monster> alivePursuers = session.getCombat().aliveMonsters();
+        MonsterType pursuer = alivePursuers.isEmpty() ? null : alivePursuers.get(0).getType();
+        if (pursuer != null && !evades(save, pursuer)) {
+            result.add("They're just as fast as you (or faster) and stay right on your heels — "
+                    + "you're dragged back into the fight!");
+            return result;
+        }
+
         Exit escape = escapes.get(dice.d(escapes.size()) - 1);
         session.setCurrentRoomId(escape.getDestinationRoomId());
         session.currentRoom().setVisited(true);
@@ -713,6 +723,34 @@ public class CombatService {
         }
         result.add("You escape to the " + escape.getDirection().lower() + ". (`look` to get your bearings.)");
         return result;
+    }
+
+    /** Evasion: the fleeing side automatically gets away if faster than the pursuer; otherwise a
+        pursuit occurs. Running exhaustion and the rulebook's separate obstacle/dropped-loot/line-of-
+        sight distraction checks aren't modeled individually (no round-tracked chase or droppable-loot
+        concept exists) — instead, failing to be faster gets one flat 2-in-6 chance to still shake the
+        pursuer, standing in for all three at once. */
+    private boolean evades(SaveGame save, MonsterType pursuer) {
+        int partyRate = groupEncounterRate(save);
+        int monsterRate = pursuer.moveRate() / 3;
+        if (partyRate > monsterRate) {
+            return true;
+        }
+        return dice.d(6) <= 2;
+    }
+
+    /** The party's group movement rate is the slowest living member's — the classic B/X "the party
+        moves at the pace of its slowest member" rule. */
+    private int groupEncounterRate(SaveGame save) {
+        Character character = save.getCharacter();
+        int slowest = character.isAlive()
+                ? Encumbrance.encounterRate(character.getArmor(), Encumbrance.heavyLoad(character.getGold()))
+                : Integer.MAX_VALUE;
+        for (Retainer r : save.livingRetainers()) {
+            // Retainers don't track personal gold/heavy-load (see RetainerFactory) — never treated as heavy.
+            slowest = Math.min(slowest, Encumbrance.encounterRate(r.getArmor(), false));
+        }
+        return slowest == Integer.MAX_VALUE ? 0 : slowest;
     }
 
     private String status(SaveGame save) {
