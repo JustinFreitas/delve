@@ -216,7 +216,15 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   per retainer. See [Multi-PC party support](#multi-pc-party-support-phase-1) below for what's still
   Phase 2+.
 
-All milestones are complete (212 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+- **Milestone 14** — best-effort auto-gear: `/roll-character` now spends a fresh PC's rolled gold for
+  them by default (`Outfitter`), buying a class-appropriate weapon, armor, and shield — degrading
+  tier-by-tier (chain mail → leather → none) rather than buying nothing on a poor gold roll — plus a
+  few torches for light, using the same `GearCatalog` prices `/buy` does. Common flavor gear (rope,
+  rations, a backpack) is skipped since it has no mechanical effect. A trailing `bare` token (e.g.
+  `/roll-character fighter Bob bare`) opts back into the old manual-shopping flow for players who want
+  to make their own gearing choices.
+
+All milestones are complete (218 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
@@ -233,12 +241,14 @@ for the roadmap.
   movement-rate field needed after all; failing to be faster gets one flat 2-in-6 chance to still shake
   them, standing in for the rulebook's separate obstacle/dropped-loot/line-of-sight checks), and item
   costs + guided shopping + sell/haggle: a new `GearCatalog` gp price list for weapons/armor/gear;
-  `/roll-character` now creates a bare, unequipped character who spends their rolled gold via the
-  extended `/buy <item>` (weapons/gear to inventory, armor/shield equipped directly) instead of getting
-  a free kit — pregen/roster/NPC generation keep the old instant-equip path untouched; and a new
-  `/sell <item>` sells gear back at 10% of its price plus a haggle bonus (2d6 + CHA modifier, up to
-  +25%). Gems/jewelry (already convert straight to gold at loot time) and scrolls (delve has no physical
-  scroll item) aren't sellable, since neither is modeled as a distinct item.
+  `/roll-character` now creates a bare, unequipped character underneath (spending their rolled gold via
+  the extended `/buy <item>` — weapons/gear to inventory, armor/shield equipped directly — is still
+  available and is what `bare` rolls fall back to), instead of the old free kit — pregen/roster/NPC
+  generation keep the old instant-equip path untouched; and a new `/sell <item>` sells gear back at 10%
+  of its price plus a haggle bonus (2d6 + CHA modifier, up to +25%). Gems/jewelry (already convert
+  straight to gold at loot time) and scrolls (delve has no physical scroll item) aren't sellable, since
+  neither is modeled as a distinct item. (Milestone 14 below layers a best-effort auto-gear default back
+  on top of this bare foundation.)
 
 ### Known gaps (house rules not yet ported)
 
@@ -298,7 +308,7 @@ half-built:
 |---|---|
 | `/ping` | Liveness check + gateway latency. |
 | `/help` `[command]` | List commands, or detailed help for one. |
-| `/roll-character <class> [name]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling). |
+| `/roll-character <class> [name] [bare]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling); auto-gears with a class-appropriate kit by default, or `bare` to shop for yourself with `/buy`. |
 | `/sheet` | Show your current character sheet. |
 | `/enter [module]` | Begin a delve — procedural, or run an authored module by name. |
 | `/loadmodule` | List authored modules available to `/enter`. |

@@ -1,6 +1,7 @@
 package dev.freitas.delve.command;
 
 import dev.freitas.delve.game.CharacterFactory;
+import dev.freitas.delve.game.Outfitter;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
@@ -14,10 +15,13 @@ import dev.freitas.delve.game.session.SpellService;
 import org.springframework.stereotype.Component;
 
 /**
- * Rolls up a new level-1 B/X character: {@code /roll-character <class> [name]}. Abilities are rolled
- * 3d6 in order; if they fail the chosen class's minimum requirements the roll is rejected (re-run to
- * try again, as in B/X). The first roll starts a fresh party; every roll after that adds another PC to
- * the party (up to {@link SaveGame#MAX_CHARACTERS}) instead of replacing anyone.
+ * Rolls up a new level-1 B/X character: {@code /roll-character <class> [name] [bare]}. Abilities are
+ * rolled 3d6 in order; if they fail the chosen class's minimum requirements the roll is rejected (re-run
+ * to try again, as in B/X). The first roll starts a fresh party; every roll after that adds another PC
+ * to the party (up to {@link SaveGame#MAX_CHARACTERS}) instead of replacing anyone. By default the new
+ * PC is immediately best-effort auto-geared ({@link Outfitter}) so they're ready to delve without a
+ * manual shopping trip; a trailing {@code bare} token skips that for players who want to pick their own
+ * gear via {@code /buy}.
  */
 @Component
 public class RollCharacterCommand extends Command {
@@ -44,9 +48,16 @@ public class RollCharacterCommand extends Command {
             return;
         }
 
-        String name = tokens.length > 1 && !tokens[1].isBlank()
-                ? tokens[1].trim()
-                : ctx.getInvoker().getEffectiveName();
+        String rest = tokens.length > 1 ? tokens[1].trim() : "";
+        boolean bare = false;
+        if (rest.equalsIgnoreCase("bare")) {
+            bare = true;
+            rest = "";
+        } else if (rest.toLowerCase(java.util.Locale.ROOT).endsWith(" bare")) {
+            bare = true;
+            rest = rest.substring(0, rest.length() - " bare".length()).trim();
+        }
+        String name = rest.isBlank() ? ctx.getInvoker().getEffectiveName() : rest;
 
         AbilityScores abilities = AbilityScores.roll(dice);
         if (!characterClass.meetsRequirements(abilities)) {
@@ -66,6 +77,8 @@ public class RollCharacterCommand extends Command {
 
         Character character = characterFactory.createBare(name, characterClass, abilities);
         spells.autoPrepare(character); // a fresh caster is ready to cast (no-op for non-casters)
+        int startingGold = character.getGold();
+        String outfitSummary = bare ? null : Outfitter.outfit(character);
 
         int partySizeAfter = existing.getCharacters().size() + 1;
         // Only the very first roll starts a fresh dungeon session — otherwise it would blow away an
@@ -80,16 +93,17 @@ public class RollCharacterCommand extends Command {
             }
         });
 
+        String gearLine = bare
+                ? "You start with **" + startingGold + " gp** and no gear — head to `" + ctx.getPrefix()
+                        + "buy <item>` to kit up (weapon, armor, a shield, torches, and the rest) before "
+                        + "your first delve."
+                : "Started with **" + startingGold + " gp** and " + outfitSummary;
         String reply = firstPc
-                ? "Rolled up **" + name + "**, a level 1 " + characterClass.displayName() + "! "
-                        + "You start with **" + character.getGold() + " gp** and no gear — head to `"
-                        + ctx.getPrefix() + "buy <item>` to kit up (weapon, armor, a shield, torches, and "
-                        + "the rest) before your first delve."
+                ? "Rolled up **" + name + "**, a level 1 " + characterClass.displayName() + "! " + gearLine
                 : "Rolled up **" + name + "**, a level 1 " + characterClass.displayName()
                         + ", and added them to the party (" + partySizeAfter + "/" + SaveGame.MAX_CHARACTERS
-                        + "). They start with **" + character.getGold() + " gp** and no gear — gear them up "
-                        + "before their first fight (note: `buy`/`wield` and a few other commands still "
-                        + "act on your first-rolled PC only; naming a specific PC for those is coming soon).";
+                        + "). " + gearLine + " (note: `buy`/`wield` and a few other commands still act on "
+                        + "your first-rolled PC only; naming a specific PC for those is coming soon).";
         ctx.reply(reply);
         ctx.replyEmbed(CharacterSheets.embed(character));
     }
@@ -111,10 +125,13 @@ public class RollCharacterCommand extends Command {
 
     @Override
     public void provideHelp(HelpContext help) {
-        help.addUsage("<class> [name]");
+        help.addUsage("<class> [name] [bare]");
         help.addDescription("Rolls a new level-1 character of the given B/X class (Cleric, Fighter, "
                 + "Magic-User, Thief, Dwarf, Elf, Halfling). The first roll starts your party; every "
                 + "roll after that adds another PC (up to " + SaveGame.MAX_CHARACTERS + ") instead of "
-                + "replacing anyone.");
+                + "replacing anyone. By default the new PC is immediately best-effort auto-geared "
+                + "(a class-appropriate weapon, armor, shield, and torches, spending as much of their "
+                + "rolled gold as it can afford); add `bare` at the end to skip that and shop for "
+                + "yourself instead with `buy`.");
     }
 }
