@@ -37,7 +37,7 @@ public class AutodelveCommand extends Command {
                     + "roll-character <class>` or build one with `" + ctx.getPrefix() + "pregen`.");
             return;
         }
-        if (!save.getCharacter().isAlive()) {
+        if (save.livingCharacters().isEmpty()) {
             ctx.reply("Your character has died. Roll or pregen a new one to try again.");
             return;
         }
@@ -101,7 +101,7 @@ public class AutodelveCommand extends Command {
         } else {
             ctx.reply(outcomeLine);
         }
-        if (save.getCharacter().isAlive()) {
+        if (!save.livingCharacters().isEmpty()) {
             ctx.replyEmbed(CharacterSheets.embed(save.getCharacter()));
             ctx.reply(PartySummary.text(save));
         }

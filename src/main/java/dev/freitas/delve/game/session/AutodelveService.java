@@ -13,6 +13,7 @@ import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,7 +139,8 @@ public class AutodelveService {
             // with no visible cause. Simulate the sensible call a cautious player would make: the PC
             // drops their shield, then their off-hand weapon if still needed, rather than soft-locking
             // every future delve.
-            boolean anyoneHasAFreeHand = Hands.free(c.getMainWeapon(), c.isShield(), false, c.getOffHandWeapon() != null) >= 1
+            boolean anyoneHasAFreeHand = save.livingCharacters().stream()
+                    .anyMatch(pc -> Hands.free(pc.getMainWeapon(), pc.isShield(), false, pc.getOffHandWeapon() != null) >= 1)
                     || save.livingRetainers().stream()
                             .anyMatch(r -> Hands.free(r.getMainWeapon(), r.isShield(), false) >= 1);
             if (!anyoneHasAFreeHand && c.isShield()) {
@@ -154,9 +156,12 @@ public class AutodelveService {
             List<String> milestones = new ArrayList<>();
             runEpisode(save, episodeLevelCap, milestones, detail);
 
-            if (!c.isAlive()) {
+            // Whether the party was wiped, not just the primary PC -- other living PCs may have kept
+            // fighting after the primary fell.
+            if (save.livingCharacters().isEmpty()) {
                 outcome = Outcome.DIED;
-                milestones.add(c.getName() + " fell in the dungeon.");
+                boolean solo = save.getCharacters().size() == 1;
+                milestones.add(solo ? c.getName() + " fell in the dungeon." : "The whole party fell in the dungeon.");
             } else {
                 if (pace == Pace.FAST && !singleDelve) {
                     awardDelveCompletion(c);
@@ -177,13 +182,13 @@ public class AutodelveService {
                     log.add("  - " + milestone);
                 }
             }
-            if (!c.isAlive()) {
+            if (save.livingCharacters().isEmpty()) {
                 break;
             }
         }
 
         // Always end safely in town.
-        if (c.isAlive()) {
+        if (!save.livingCharacters().isEmpty()) {
             town.simulateReturnToTown(save);
         }
         return new Result(outcome, episode, startLevel, c.getLevel(), c.getXp(), log);
@@ -211,7 +216,10 @@ public class AutodelveService {
         Map<Integer, Integer> treasureTrapAttempts = new HashMap<>();
 
         for (int step = 0; step < MAX_STEPS_PER_EPISODE; step++) {
-            if (!c.isAlive() || c.getLevel() >= targetLevel) {
+            // Whether to keep exploring is a whole-party question (someone still standing), not just
+            // whether the primary PC survives -- the target-level check stays keyed to the primary PC
+            // for now (multi-PC grind-to-level targeting is a separate, tabled design question).
+            if (save.livingCharacters().isEmpty() || c.getLevel() >= targetLevel) {
                 return;
             }
             if (session.getState() == SessionState.IN_COMBAT) {
@@ -221,12 +229,15 @@ public class AutodelveService {
             // Out of light or down to half health: end the episode and head back to town to recover.
             // Staying conservative keeps a fragile low-level character alive across many delves — this
             // also naturally bounds how many trapped-treasure retries can happen before backing off.
-            if (session.isInDarkness() || c.getCurrentHp() * 2 <= c.getMaxHp()) {
+            // Keyed off whichever living PC is currently worst off, since damage is spread across the
+            // whole party, not just the primary PC.
+            Character weakest = weakestLivingPc(save);
+            if (session.isInDarkness() || weakest.getCurrentHp() * 2 <= weakest.getMaxHp()) {
                 return;
             }
             Room room = session.currentRoom();
             if (room.hasLiveMonster()) {
-                if (roomTooDangerous(room, c)) {
+                if (roomTooDangerous(room, weakest)) {
                     // Slip away from a deadly pack rather than picking the fight.
                     if (!exploreStep(save, milestones, detail)) {
                         return;
@@ -291,7 +302,9 @@ public class AutodelveService {
         boolean isTreasureTrapAttempt = room.isHasTreasure() && !room.isLooted()
                 && room.isTreasureTrapped() && !room.isTreasureTrapDisarmed();
 
-        int goldBefore = c.getGold();
+        // Recovered gold is split across every living PC (ExplorationService's loot logic), so the
+        // "found" delta must be summed across all of them, not read off the primary PC alone.
+        int goldBefore = save.livingCharacters().stream().mapToInt(Character::getGold).sum();
         int potionsBefore = c.getHealingPotions();
         ExplorationResult result = exploration.search(save, detail == LogDetail.VERBOSE);
         logIfVerbose(milestones, detail, result);
@@ -305,7 +318,7 @@ public class AutodelveService {
         }
 
         if (detail == LogDetail.MILESTONES) {
-            int goldFound = c.getGold() - goldBefore;
+            int goldFound = save.livingCharacters().stream().mapToInt(Character::getGold).sum() - goldBefore;
             if (goldFound > 0) {
                 String potionNote = c.getHealingPotions() > potionsBefore ? " (plus a potion of healing)" : "";
                 milestones.add("Recovered " + goldFound + " gp" + potionNote + ".");
@@ -314,23 +327,28 @@ public class AutodelveService {
     }
 
     private void fightStep(SaveGame save, List<String> milestones, LogDetail detail) {
-        Character c = save.getCharacter();
-
-        // Quaff a potion first if badly hurt and one is on hand.
-        if (c.getCurrentHp() * 4 <= c.getMaxHp() && c.getHealingPotions() > 0) {
-            c.setHealingPotions(c.getHealingPotions() - 1);
-            c.setCurrentHp(Math.min(c.getMaxHp(), c.getCurrentHp() + POTION.roll(dice)));
-            if (detail == LogDetail.MILESTONES) {
-                milestones.add("Quaffed a healing potion at " + c.getCurrentHp() + "/" + c.getMaxHp() + " hp.");
+        // Every living PC badly hurt with a potion on hand quaffs from their own stash first — not just
+        // the primary PC, since each PC carries their own healingPotions count.
+        boolean solo = save.getCharacters().size() == 1;
+        for (Character pc : save.livingCharacters()) {
+            if (pc.getCurrentHp() * 4 <= pc.getMaxHp() && pc.getHealingPotions() > 0) {
+                pc.setHealingPotions(pc.getHealingPotions() - 1);
+                pc.setCurrentHp(Math.min(pc.getMaxHp(), pc.getCurrentHp() + POTION.roll(dice)));
+                if (detail == LogDetail.MILESTONES) {
+                    milestones.add((solo ? "Quaffed" : pc.getName() + " quaffs") + " a healing potion at "
+                            + pc.getCurrentHp() + "/" + pc.getMaxHp() + " hp.");
+                }
             }
         }
 
-        // Disengage from a fight we could lose: if the enemies' expected damage this round rivals our
-        // remaining hit points, or we're already at half, flee rather than trade blows. A fragile
-        // low-level delver survives far more delves this way (and the FAST pace rewards survival).
+        // Disengage from a fight we could lose: if the enemies' expected damage this round rivals the
+        // worst-off living PC's remaining hit points, or that PC is already at half, flee rather than
+        // trade blows. A fragile party survives far more delves this way (and the FAST pace rewards
+        // survival). Keyed off whichever PC is weakest post-quaff, since damage is spread party-wide.
         String foe = currentFoeLabel(save);
         double incoming = expectedIncomingDamage(save);
-        if (incoming >= c.getCurrentHp() || c.getCurrentHp() * 2 <= c.getMaxHp()) {
+        Character weakest = weakestLivingPc(save);
+        if (incoming >= weakest.getCurrentHp() || weakest.getCurrentHp() * 2 <= weakest.getMaxHp()) {
             ExplorationResult fleeResult = combat.flee(save);
             if (detail == LogDetail.MILESTONES) {
                 milestones.add("Fled a losing fight with " + foe + ".");
@@ -357,6 +375,16 @@ public class AutodelveService {
         }
         String name = encounter.getMonsterName().toLowerCase();
         return encounter.getInitialCount() > 1 ? (name + "s") : ("a " + name);
+    }
+
+    /** The living PC currently worst off by HP fraction — the party's in-delve safety checks (retreat,
+        room-danger avoidance, quaffing) are keyed off this PC rather than always the primary one, since
+        monster attacks are spread across the whole party. Callers must only invoke this when at least
+        one PC is alive (every call site here is reached only after that's already been checked). */
+    private Character weakestLivingPc(SaveGame save) {
+        return save.livingCharacters().stream()
+                .min(Comparator.comparingDouble(pc -> (double) pc.getCurrentHp() / pc.getMaxHp()))
+                .orElseThrow();
     }
 
     /** Whether an unfought monster room is too dangerous to engage — a round could cost most of our HP. */
@@ -401,6 +429,7 @@ public class AutodelveService {
             return true;
         }
 
+        Character weakest = weakestLivingPc(save);
         Exit safeUnvisited = null;
         Exit safeVisited = null;
         Exit closedToSafe = null;
@@ -409,7 +438,7 @@ public class AutodelveService {
                 continue;
             }
             Room dest = session.currentLevel().room(exit.getDestinationRoomId());
-            boolean deadly = dest != null && dest.hasLiveMonster() && roomTooDangerous(dest, c);
+            boolean deadly = dest != null && dest.hasLiveMonster() && roomTooDangerous(dest, weakest);
             if (deadly) {
                 continue; // never walk knowingly into a deadly room
             }

@@ -274,4 +274,120 @@ class AutodelveTest {
             assertThat(result.episodes()).isBetween(6, 20);
         }
     }
+
+    // --- Multi-PC single-delve awareness -------------------------------------
+
+    @Test
+    void singleDelveDoesNotReportDeathWhenOnlyTheNonPrimaryPcSurvives() {
+        // Regression: the episode loop used to stop (and run() reported DIED) the instant the primary
+        // PC died, even if another PC was still alive and fighting. Give the primary essentially no HP
+        // (dies to almost anything) and the second PC a huge HP pool (should easily survive); across
+        // enough seeds, find one where the primary falls but the second PC doesn't, and confirm the run
+        // does NOT report DIED in that case.
+        boolean found = false;
+        for (long seed = 1; seed <= 60 && !found; seed++) {
+            Dice dice = new Dice(new Random(seed));
+            AutodelveService service = newService(dice);
+            SaveGame save = new SaveGame();
+            Character fragile = new CharacterFactory(dice)
+                    .create("Fragile", CharacterClass.MAGIC_USER, new AbilityScores(9, 9, 9, 9, 9, 9));
+            fragile.setMaxHp(1);
+            fragile.setCurrentHp(1);
+            fragile.setHealingPotions(0);
+            save.setCharacter(fragile);
+            Character tank = new CharacterFactory(dice)
+                    .create("Tank", CharacterClass.FIGHTER, new AbilityScores(16, 9, 9, 13, 13, 9));
+            tank.setMaxHp(200);
+            tank.setCurrentHp(200);
+            save.addCharacter(tank);
+
+            AutodelveService.Result result = service.run(save, 1); // single delve
+
+            if (!fragile.isAlive() && tank.isAlive()) {
+                found = true;
+                assertThat(result.outcome()).as("seed " + seed).isNotEqualTo(AutodelveService.Outcome.DIED);
+            }
+        }
+        assertThat(found).isTrue();
+    }
+
+    @Test
+    void weakestLivingPcHpTriggersRetreatEvenWhenThePrimaryPcIsHealthy() {
+        // Regression: the retreat-to-town check used to look only at the primary PC's HP. Anna starts
+        // at full health; Bram starts already at exactly half -- the retreat check fires before any
+        // exploring happens, so this is deterministic regardless of seed.
+        Dice dice = new Dice(new Random(7));
+        AutodelveService service = newService(dice);
+        SaveGame save = new SaveGame();
+        Character anna = new CharacterFactory(dice)
+                .create("Anna", CharacterClass.FIGHTER, new AbilityScores(13, 9, 9, 12, 13, 9));
+        anna.setMaxHp(60);
+        anna.setCurrentHp(60);
+        save.setCharacter(anna);
+        Character bram = new CharacterFactory(dice)
+                .create("Bram", CharacterClass.CLERIC, new AbilityScores(9, 9, 9, 9, 9, 9));
+        bram.setMaxHp(20);
+        bram.setCurrentHp(10); // exactly half -- triggers retreat on its own
+        save.addCharacter(bram);
+
+        service.run(save, 1); // single delve
+
+        assertThat(save.getSession().getState()).isEqualTo(SessionState.IN_TOWN);
+    }
+
+    @Test
+    void eachLivingPcQuaffsTheirOwnPotionWhenBadlyHurtNotJustThePrimary() {
+        // Regression: fightStep used to quaff only from the primary PC's stash. Two modestly-tough
+        // fighters with plenty of potions are likely to have at least one of them (not necessarily the
+        // primary) drop below the 1/4-hp quaff threshold across enough seeds of real combat.
+        boolean sawNonPrimaryQuaff = false;
+        for (long seed = 1; seed <= 60 && !sawNonPrimaryQuaff; seed++) {
+            Dice dice = new Dice(new Random(seed));
+            AutodelveService service = newService(dice);
+            SaveGame save = new SaveGame();
+            Character anna = new CharacterFactory(dice)
+                    .create("Anna", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 13, 13, 9));
+            anna.setMaxHp(12);
+            anna.setCurrentHp(12);
+            anna.setHealingPotions(3);
+            save.setCharacter(anna);
+            Character bram = new CharacterFactory(dice)
+                    .create("Bram", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 13, 13, 9));
+            bram.setMaxHp(12);
+            bram.setCurrentHp(12);
+            bram.setHealingPotions(3);
+            save.addCharacter(bram);
+
+            service.run(save, 1); // single delve
+
+            if (bram.getHealingPotions() < 3) {
+                sawNonPrimaryQuaff = true;
+            }
+        }
+        assertThat(sawNonPrimaryQuaff).isTrue();
+    }
+
+    @Test
+    void handFreedomCheckSeesEveryLivingPcNotJustThePrimary() {
+        // Regression: the "does anyone already have a free hand for the torch" detection used to check
+        // only the primary PC plus retainers -- it would wrongly strip the primary's shield even when a
+        // second PC already had a free hand.
+        Dice dice = new Dice(new Random(3));
+        AutodelveService service = newService(dice);
+        SaveGame save = new SaveGame();
+        Character anna = new CharacterFactory(dice)
+                .create("Anna", CharacterClass.FIGHTER, new AbilityScores(13, 9, 9, 12, 13, 9));
+        anna.setMainWeapon("Sword");
+        anna.setShield(true); // sword + shield: no free hand on her own
+        save.setCharacter(anna);
+        Character bram = new CharacterFactory(dice)
+                .create("Bram", CharacterClass.THIEF, new AbilityScores(9, 13, 9, 9, 9, 9));
+        bram.setMainWeapon("Sword");
+        bram.setShield(false); // one-handed weapon, no shield: already has a free hand
+        save.addCharacter(bram);
+
+        service.run(save, 1); // single delve
+
+        assertThat(anna.isShield()).isTrue(); // never stripped -- Bram already had a free hand
+    }
 }
