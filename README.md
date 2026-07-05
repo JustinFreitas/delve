@@ -243,6 +243,9 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   - Fixed a pre-existing bug: the wandering-monster check's party-size count was hardcoded to
     `1 + retainers` (assuming exactly one PC), silently undercounting any multi-PC party and delaying
     the penalty past its intended threshold. Now counts every living PC.
+  - `/sheet [pc-name]` — the first of the ~9 remaining single-PC commands to get the multi-PC treatment:
+    an optional PC-name argument (defaults to the first-rolled PC), same `save.resolve()` pattern as
+    `/attack`/`/outfit`.
 
 All milestones are complete (225 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
@@ -297,9 +300,9 @@ above 9 party members was **already implemented** (`ExplorationService.wandering
 already matched this. Phase 1 (see Milestone 13 above) shipped the rest of the foundation: the data
 model, roster commands, and full combat integration. Still Phase 2+, deferred deliberately rather than
 half-built:
-- **~10 remaining commands** still act only on the first-rolled PC: `/sheet`, `/wield`, `/quaff`,
-  `/buy`, `/sell`, `/prepare`, `/enter`, `/export`, `/light`. Each needs the same optional-PC-name-
-  argument treatment `/attack` already got.
+- **~8 remaining commands** still act only on the first-rolled PC: `/wield`, `/quaff`, `/buy`, `/sell`,
+  `/prepare`, `/enter`, `/export`, `/light`. Each needs the same optional-PC-name-argument treatment
+  `/attack`/`/sheet` already got.
 - **`/autodelve`** doesn't yet make multi-PC autopilot decisions (whose HP triggers a retreat? who
   quaffs a potion?) — its simulation loop threads one PC through every decision today.
 - **The web interface** (`GameFacade`/`StateSnapshot`/`app.js`) still only shows/plays the first PC —
@@ -332,7 +335,7 @@ half-built:
 | `/help` `[command]` | List commands, or detailed help for one. |
 | `/roll-character <class> [name] [bare]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling); auto-gears with a class-appropriate kit by default, or `bare` to shop for yourself with `/buy`. |
 | `/outfit [pc-name]` | Best-effort auto-gear an already-rolled PC (town only) — the same thing `/roll-character` does by default. |
-| `/sheet` | Show your current character sheet. |
+| `/sheet [pc-name]` | Show a character sheet — your first-rolled PC by default, or name a specific PC. |
 | `/enter [module]` | Begin a delve — procedural, or run an authored module by name. |
 | `/loadmodule` | List authored modules available to `/enter`. |
 | `/look` | Describe the current room (free). |
