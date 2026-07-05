@@ -11,8 +11,8 @@ import java.nio.charset.StandardCharsets;
 import org.springframework.stereotype.Component;
 
 /**
- * Exports the invoker's current character for use at the table: {@code /export [embed|text|json]}
- * (default {@code text}). The JSON form attaches a downloadable file with a clean B/X stat block.
+ * Exports a character for use at the table: {@code /export [pc-name] [embed|text|json]} (default
+ * {@code text}). The JSON form attaches a downloadable file with a clean B/X stat block.
  */
 @Component
 public class ExportCommand extends Command {
@@ -32,9 +32,21 @@ public class ExportCommand extends Command {
                     + "pregen <class> <level>` or `" + ctx.getPrefix() + "roll-character <class>`.");
             return;
         }
-        Character c = save.getCharacter();
-        String format = ctx.getArgumentText().trim().toLowerCase();
+        String argsText = ctx.getArgumentText().trim();
 
+        // An optional leading PC-name names which PC to export in a multi-PC party. Unlike commands
+        // where a mandatory argument follows (e.g. an item or spell name), here BOTH tokens are fully
+        // optional and independent, so a lone PC name (no format given) is still recognized — no need
+        // to require a remaining token before treating the leading word as a name.
+        Character c = save.getCharacter();
+        int leadSpace = argsText.indexOf(' ');
+        String leadToken = leadSpace > 0 ? argsText.substring(0, leadSpace) : argsText;
+        if (!leadToken.isBlank() && save.resolve(leadToken) instanceof Character named) {
+            c = named;
+            argsText = leadSpace > 0 ? argsText.substring(leadSpace + 1).trim() : "";
+        }
+
+        String format = argsText.toLowerCase();
         switch (format) {
             case "embed" -> ctx.replyEmbed(CharacterSheets.embed(c));
             case "json" -> exportJson(ctx, c);
@@ -61,8 +73,9 @@ public class ExportCommand extends Command {
 
     @Override
     public void provideHelp(HelpContext help) {
-        help.addUsage("[embed|text|json]");
-        help.addDescription("Exports your current character: an embed, a copy-paste stat block (default), "
-                + "or a downloadable JSON file.");
+        help.addUsage("[pc-name] [embed|text|json]");
+        help.addDescription("Exports a character: an embed, a copy-paste stat block (default), or a "
+                + "downloadable JSON file. In a multi-PC party, name a PC first; defaults to your "
+                + "first-rolled PC.");
     }
 }

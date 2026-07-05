@@ -11,7 +11,10 @@ import dev.freitas.delve.game.session.ExplorationResult;
 import dev.freitas.delve.game.session.LightingService;
 import org.springframework.stereotype.Component;
 
-/** Views the party's light status, or lights a fresh torch/lantern: {@code /light [torch|lantern]}. */
+/** Views the party's light status, or lights a fresh torch/lantern: {@code /light [torch|lantern]}. No
+    {@code [pc-name]} argument — the party's torch/lantern is one shared light source (see
+    {@code LightingService}), not a per-PC action; reassigning who physically carries it is
+    {@code /torchbearer [name]}'s job instead. */
 @Component
 public class LightCommand extends Command {
 
@@ -64,7 +67,9 @@ public class LightCommand extends Command {
                     .append(bearer == null ? "no one" : (SaveGame.PLAYER_SLOT.equals(bearer) ? "you" : bearer))
                     .append(", ").append(active.radiusFeet()).append("' radius.");
         }
-        sb.append("\nOwned: ").append(pc.getTorches()).append(" torch(es), ").append(pc.getLanterns())
+        boolean solo = save.getCharacters().size() == 1;
+        sb.append("\nOwned").append(solo ? "" : " (by " + pc.getName() + ", the party's shared supply)")
+                .append(": ").append(pc.getTorches()).append(" torch(es), ").append(pc.getLanterns())
                 .append(" lantern(s), ").append(pc.getOilFlasks()).append(" oil flask(s).");
         return sb.toString();
     }
@@ -75,6 +80,8 @@ public class LightCommand extends Command {
         help.addDescription("Shows the party's light status, or lights a fresh torch/lantern (needs "
                 + "one owned — `buy` more in town — and a party member with a free hand to hold it). "
                 + "A torch is cheap and burns 6 turns per unit; a lantern costs more but burns 24 turns "
-                + "per flask of oil.");
+                + "per flask of oil. The party's light is one shared resource (drawn from your "
+                + "first-rolled PC's stock) — `torchbearer [name]` reassigns who's physically carrying "
+                + "it.");
     }
 }

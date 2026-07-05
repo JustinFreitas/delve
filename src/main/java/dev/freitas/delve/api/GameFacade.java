@@ -239,7 +239,7 @@ public class GameFacade {
         }
         ExplorationResult result = save.getSession().getState() == SessionState.IN_COMBAT
                 ? combat.castRound(save, spell, target)
-                : spells.castOutOfCombat(save, spell);
+                : spells.castOutOfCombat(save.getCharacter(), spell);
         gameState.save(userId, save);
         return toResult(save, result);
     }

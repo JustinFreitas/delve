@@ -37,15 +37,17 @@ public class CastCommand extends Command {
 
         String arg = ctx.getArgumentText().trim();
         if (arg.isBlank()) {
-            ctx.reply("Cast what? `cast <spell> [target]`. Prepared: " + preparedList(save));
+            ctx.reply("Cast what? `cast [pc-name] <spell> [target]`. Prepared: " + preparedList(save.getCharacter()));
             return;
         }
 
         // An optional leading PC-name names the acting caster in a multi-PC party.
+        Character actor = save.getCharacter();
         String actorToken = null;
         int firstSpace = arg.indexOf(' ');
         String firstToken = firstSpace > 0 ? arg.substring(0, firstSpace) : arg;
-        if (firstSpace > 0 && save.resolve(firstToken) instanceof Character) {
+        if (firstSpace > 0 && save.resolve(firstToken) instanceof Character named) {
+            actor = named;
             actorToken = firstToken;
             arg = arg.substring(firstSpace + 1).trim();
         }
@@ -65,22 +67,22 @@ public class CastCommand extends Command {
 
         Spell spell = Spell.parse(spellName);
         if (spell == null) {
-            ctx.reply("You don't know a spell called \"" + spellName + "\". Prepared: " + preparedList(save));
+            ctx.reply("You don't know a spell called \"" + spellName + "\". Prepared: " + preparedList(actor));
             return;
         }
 
         ExplorationResult result = save.getSession().getState() == SessionState.IN_COMBAT
                 ? combat.castRound(save, actorToken, spell, target)
-                : spells.castOutOfCombat(save, spell);
+                : spells.castOutOfCombat(actor, spell);
         ctx.getBeans().gameState.save(userId, save);
         ctx.reply(result.text());
     }
 
-    private String preparedList(SaveGame save) {
-        if (save.getCharacter().getMemorizedSpells().isEmpty()) {
+    private String preparedList(Character c) {
+        if (c.getMemorizedSpells().isEmpty()) {
             return "(none — rest in town or `prepare`)";
         }
-        return save.getCharacter().getMemorizedSpells().stream()
+        return c.getMemorizedSpells().stream()
                 .map(Spell::valueOf)
                 .map(Spell::displayName)
                 .reduce((a, b) -> a + ", " + b)

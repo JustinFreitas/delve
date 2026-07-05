@@ -11,9 +11,9 @@ import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.SaveGame;
 import org.springframework.stereotype.Component;
 
-/** Sells a recognized inventory item, worn armor, or a shield back for gold, in town: {@code /sell <item>}.
-    Used equipment sells for 10% of its {@link GearCatalog} price, plus a haggle bonus from a 2d6 + CHA
-    reaction-style roll. */
+/** Sells a recognized inventory item, worn armor, or a shield back for gold, in town:
+    {@code /sell [pc-name] <item>}. Used equipment sells for 10% of its {@link GearCatalog} price, plus
+    a haggle bonus from a 2d6 + CHA reaction-style roll. */
 @Component
 public class SellCommand extends Command {
 
@@ -38,45 +38,60 @@ public class SellCommand extends Command {
             ctx.reply("You can only sell gear in town.");
             return;
         }
-        String name = ctx.getArgumentText().trim();
+        String argsText = ctx.getArgumentText().trim();
+
+        // An optional leading PC-name names whose gear is being sold in a multi-PC party.
+        Character resolved = save.getCharacter();
+        int leadSpace = argsText.indexOf(' ');
+        String leadToken = leadSpace > 0 ? argsText.substring(0, leadSpace) : argsText;
+        if (leadSpace > 0 && save.resolve(leadToken) instanceof Character named) {
+            resolved = named;
+            argsText = argsText.substring(leadSpace + 1).trim();
+        }
+        final Character character = resolved;
+        boolean solo = save.getCharacters().size() == 1;
+        String prefix = solo ? "" : character.getName() + ": ";
+
+        String name = argsText;
         if (name.isBlank()) {
-            ctx.reply("Sell what? `sell <item>` — check `sheet` for your inventory. Or `sell armor`/`sell shield`.");
+            ctx.reply(prefix + "Sell what? `sell [pc-name] <item>` — check `sheet` for your inventory. "
+                    + "Or `sell armor`/`sell shield`.");
             return;
         }
-        Character character = save.getCharacter();
 
         if (name.equalsIgnoreCase("shield")) {
             if (!character.isShield()) {
-                ctx.reply("You don't have a shield to sell.");
+                ctx.reply(prefix + "You don't have a shield to sell.");
                 return;
             }
-            sell(ctx, save, character, "Shield", () -> character.setShield(false));
+            sell(ctx, save, character, "Shield", () -> character.setShield(false), prefix);
             return;
         }
         if (name.equalsIgnoreCase("armor")) {
             if (character.getArmor() == Armor.NONE) {
-                ctx.reply("You have no armor to sell.");
+                ctx.reply(prefix + "You have no armor to sell.");
                 return;
             }
             Armor worn = character.getArmor();
-            sell(ctx, save, character, worn.displayName(), () -> character.setArmor(Armor.NONE));
+            sell(ctx, save, character, worn.displayName(), () -> character.setArmor(Armor.NONE), prefix);
             return;
         }
 
         String match = InventoryMatcher.find(character, name);
         if (match == null) {
-            ctx.reply("You don't have **" + name + "** in your inventory.");
+            ctx.reply(prefix + "You don't have **" + name + "** in your inventory.");
             return;
         }
         int price = GearCatalog.priceGp(match);
         if (price < 0) {
-            ctx.reply("The trader can't appraise **" + match + "** — no sale.");
+            ctx.reply(prefix + "The trader can't appraise **" + match + "** — no sale.");
             return;
         }
-        sell(ctx, save, character, match, () -> character.getInventory().remove(match));
+        sell(ctx, save, character, match, () -> character.getInventory().remove(match), prefix);
     }
 
-    private void sell(CommandContext ctx, SaveGame save, Character character, String itemLabel, Runnable remove) {
+    private void sell(
+            CommandContext ctx, SaveGame save, Character character, String itemLabel, Runnable remove, String prefix) {
         int price = GearCatalog.priceGp(itemLabel);
         int bonusPercent = haggleBonusPercent(character);
         int amount = Math.max(1, price * (BASE_SALE_PERCENT + bonusPercent) / 100);
@@ -85,7 +100,7 @@ public class SellCommand extends Command {
         character.setGold(character.getGold() + amount);
         ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);
         String haggleNote = bonusPercent > 0 ? " (haggled up from the base 10%)" : "";
-        ctx.reply("You sell **" + itemLabel + "** for **" + amount + " gp**" + haggleNote + "; "
+        ctx.reply(prefix + "You sell **" + itemLabel + "** for **" + amount + " gp**" + haggleNote + "; "
                 + character.getGold() + " gp now.");
     }
 
@@ -113,12 +128,13 @@ public class SellCommand extends Command {
 
     @Override
     public void provideHelp(HelpContext help) {
-        help.addUsage("<item>");
-        help.addUsage("armor");
-        help.addUsage("shield");
+        help.addUsage("[pc-name] <item>");
+        help.addUsage("[pc-name] armor");
+        help.addUsage("[pc-name] shield");
         help.addDescription("Sells a recognized inventory item (or your worn armor/shield) back for "
                 + BASE_SALE_PERCENT + "% of its price, plus a haggle bonus (2d6 + CHA modifier) of up to "
                 + "+25% on a great roll. Items the trader can't appraise (loot/magic items with no listed "
-                + "price) can't be sold this way.");
+                + "price) can't be sold this way. In a multi-PC party, name a PC first; defaults to your "
+                + "first-rolled PC.");
     }
 }

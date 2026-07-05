@@ -29,8 +29,13 @@ public class EnterCommand extends Command {
             ctx.reply("You need a character first. Roll one with `" + ctx.getPrefix() + "roll-character <class>`.");
             return;
         }
-        if (!save.getCharacter().isAlive()) {
-            ctx.reply("Your character has died. Roll a new one with `" + ctx.getPrefix() + "roll-character <class>`.");
+        // Whole-party check, not just the first-rolled PC: a multi-PC party can still delve as long as
+        // any PC survives, even if the primary PC has died.
+        if (save.livingCharacters().isEmpty()) {
+            String message = save.getCharacters().size() == 1
+                    ? "Your character has died. Roll a new one with `" + ctx.getPrefix() + "roll-character <class>`."
+                    : "Your whole party has died. Roll a new character with `" + ctx.getPrefix() + "roll-character <class>`.";
+            ctx.reply(message);
             return;
         }
         if (save.getSession().isInDungeon()) {

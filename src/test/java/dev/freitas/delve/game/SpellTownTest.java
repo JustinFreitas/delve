@@ -81,9 +81,7 @@ class SpellTownTest {
         cleric.setCurrentHp(4);
         cleric.getMemorizedSpells().add(Spell.CURE_LIGHT_WOUNDS.name());
 
-        SaveGame save = new SaveGame();
-        save.setCharacter(cleric);
-        var result = spells.castOutOfCombat(save, Spell.CURE_LIGHT_WOUNDS);
+        var result = spells.castOutOfCombat(cleric, Spell.CURE_LIGHT_WOUNDS);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(cleric.getCurrentHp()).isGreaterThan(4);
@@ -94,9 +92,7 @@ class SpellTownTest {
     void damageSpellsCannotBeCastOutOfCombat() {
         Character mu = factory.create("Mage", CharacterClass.MAGIC_USER, new AbilityScores(9, 16, 9, 12, 12, 9));
         mu.getMemorizedSpells().add(Spell.MAGIC_MISSILE.name());
-        SaveGame save = new SaveGame();
-        save.setCharacter(mu);
-        var result = spells.castOutOfCombat(save, Spell.MAGIC_MISSILE);
+        var result = spells.castOutOfCombat(mu, Spell.MAGIC_MISSILE);
         assertThat(result.isSuccess()).isFalse();
         assertThat(spells.isMemorized(mu, Spell.MAGIC_MISSILE)).isTrue(); // not consumed on failure
     }

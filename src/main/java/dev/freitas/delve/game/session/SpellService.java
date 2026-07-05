@@ -103,9 +103,10 @@ public class SpellService {
         return c.getMemorizedSpells().remove(spell.name());
     }
 
-    /** Casts a non-combat spell (healing or utility). Enemy-targeting spells are rejected here. */
-    public ExplorationResult castOutOfCombat(SaveGame save, Spell spell) {
-        Character c = save.getCharacter();
+    /** Casts a non-combat spell (healing or utility) as {@code c}. Enemy-targeting spells are rejected
+        here. Takes the caster directly (not a {@link SaveGame}) so callers can resolve a specific PC in
+        a multi-PC party — see {@code CastCommand}'s optional leading PC-name argument. */
+    public ExplorationResult castOutOfCombat(Character c, Spell spell) {
         if (!isMemorized(c, spell)) {
             return ExplorationResult.failure("You don't have **" + spell.displayName() + "** prepared.");
         }

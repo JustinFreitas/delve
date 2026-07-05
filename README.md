@@ -248,6 +248,19 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
     first-rolled PC), same `save.resolve()` pattern as `/attack`/`/outfit`. Each PC already carries their
     own potions and memorized spells, so naming a specific PC for `/quaff`/`/prepare` closes a real gap,
     not just cosmetic parity.
+- **Milestone 17** — the rest of the singular-command batch, plus two correctness fixes it turned up:
+  - `/wield`, `/buy`, `/sell`, and `/export` all take the same optional leading `[pc-name]` argument now.
+    `/enter` and `/light` deliberately did not — both are whole-party actions with no single PC to name
+    (who carries the light is `/torchbearer`'s job).
+  - Fixed `/enter`'s "are you dead" gate (was `!save.getCharacter().isAlive()`, primary PC only — now
+    `save.livingCharacters().isEmpty()`, matching Phase 1's combat-defeat fix) and `/wield`'s/`/buy
+    shield`'s light-bearer check (was hardcoded to `SaveGame.PLAYER_SLOT`, only ever true when solo —
+    now `save.tokenFor(pc)`), both silent multi-PC bugs since Phase 1 shipped.
+  - `SpellService.castOutOfCombat` now takes a `Character` directly instead of always reading
+    `save.getCharacter()`, so `/cast`'s out-of-combat branch (healing/utility spells) respects the named
+    actor the same way its in-combat branch always did.
+  - Buying torches/lanterns/oil for a non-primary PC now surfaces an explicit caveat that party light is
+    still drawn only from the first-rolled PC's stock (`LightingService`'s existing, unchanged design).
 
 All milestones are complete (225 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
@@ -302,9 +315,22 @@ above 9 party members was **already implemented** (`ExplorationService.wandering
 already matched this. Phase 1 (see Milestone 13 above) shipped the rest of the foundation: the data
 model, roster commands, and full combat integration. Still Phase 2+, deferred deliberately rather than
 half-built:
-- **~6 remaining commands** still act only on the first-rolled PC: `/wield`, `/buy`, `/sell`, `/enter`,
-  `/export`, `/light`. Each needs the same optional-PC-name-argument treatment `/attack`/`/sheet`/
-  `/quaff`/`/prepare` already got.
+- **The "singular-implicit" command batch is done** — `/wield`, `/buy`, `/sell`, and `/export` now all
+  take an optional leading `[pc-name]` argument, same as `/attack`/`/hire`/`/sheet`/`/quaff`/`/prepare`.
+  `/enter` and `/light` deliberately did **not** get one: starting a delve and lighting/checking the
+  party's torch are whole-party actions with no single-PC target to name (reassigning who physically
+  *carries* the light is `/torchbearer [name]`'s job, unchanged). Two correctness fixes fell out of this
+  pass: `/enter`'s "are you dead" gate was `!save.getCharacter().isAlive()` (primary PC only) — now
+  `save.livingCharacters().isEmpty()` (whole party), matching the Phase 1 combat fix; `/wield`'s and
+  `/buy shield`'s "am I the current light-bearer" check was hardcoded to `SaveGame.PLAYER_SLOT`, which
+  is only ever true when solo — silently wrong for every multi-PC hand-fit check — now
+  `save.tokenFor(pc)`. Buying torches/lanterns/oil for a non-primary PC now gets an explicit caveat: that
+  fuel is a shared party resource still drawn only from the first-rolled PC's stock
+  (`LightingService`'s existing design, unchanged).
+- **`SpellService.castOutOfCombat`'s primary-PC-only gap is fixed**: it now takes the resolved
+  `Character` directly (was `(SaveGame, Spell)`, always `save.getCharacter()`) — `/cast`'s out-of-combat
+  branch (healing/utility spells) now respects the named actor the same way its in-combat branch always
+  did.
 - **`/autodelve`** doesn't yet make multi-PC autopilot decisions (whose HP triggers a retreat? who
   quaffs a potion?) — its simulation loop threads one PC through every decision today.
 - **The web interface** (`GameFacade`/`StateSnapshot`/`app.js`) still only shows/plays the first PC —
@@ -350,17 +376,18 @@ half-built:
 | `/party` | List your character and retainers (rank, engagement, weapon class). |
 | `/dismiss <name>` | Release a retainer. |
 | `/order [name1 name2 ...]` | View or set your marching order (front to back). |
-| `/wield <item name>` | Wield a recognized inventory item as your main weapon; `wield shield`/`wield unshield` adjusts your shield. |
+| `/wield [pc-name] <item name>` | Wield a recognized inventory item as your main weapon; `wield shield`/`wield unshield` adjusts your shield; name a PC first in a multi-PC party. |
 | `/pole [on\|off]` | Toggle probing ahead with a 10-foot pole (passive trap sense; AC risk if surprised). |
-| `/light [torch\|lantern]` | View the party's light status, or light a fresh torch/lantern. |
+| `/light [torch\|lantern]` | View the party's light status, or light a fresh torch/lantern (whole-party action, no `[pc-name]`). |
 | `/torchbearer [name]` | View or reassign who's carrying the party's lit torch/lantern. |
-| `/buy <torch\|lantern\|oil> [qty]` | Buy light supplies in town. |
-| `/cast <spell> [target]` | Cast a prepared spell (combat or utility). |
+| `/buy [pc-name] <item> [qty]` | Buy a weapon/armor/shield/gear or light supplies in town; name a PC first to spend their gold. |
+| `/sell [pc-name] <item>` | Sell a recognized inventory item (or worn armor/shield) back for gold, plus a haggle bonus; name a PC first. |
+| `/cast [pc-name] <spell> [target]` | Cast a prepared spell (combat or utility); name a PC first to have them cast. |
 | `/prepare [pc-name] <spell>` | Memorize a spell into a free slot — name a caster PC first in a multi-PC party. |
 | `/quaff [pc-name]` | Drink a potion of healing — your first-rolled PC by default, or name a specific PC. |
 | `/town` | Return to town: rest, heal, pay upkeep, re-prepare spells. |
 | `/pregen <class> [level] [name]` | Instantly build a finished character at a level (default 5). |
-| `/export [embed\|text\|json]` | Export your character (embed, stat block, or JSON file). |
+| `/export [pc-name] [embed\|text\|json]` | Export a character (embed, stat block, or JSON file); name a PC first in a multi-PC party. |
 | `/autodelve [level] [fast\|bx] [verbose\|milestones]` | Fast-forward your character via simulated delves (default B/X OSE pace, verbose log); shows the party afterward. |
 | `/roster <count> <level> [class]` | DM: mint a party of pregens (+ JSON file). |
 | `/npc <class> <level> [name]` | DM: generate a single named NPC (+ JSON file). |
