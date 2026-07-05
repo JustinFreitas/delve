@@ -243,10 +243,11 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   - Fixed a pre-existing bug: the wandering-monster check's party-size count was hardcoded to
     `1 + retainers` (assuming exactly one PC), silently undercounting any multi-PC party and delaying
     the penalty past its intended threshold. Now counts every living PC.
-  - `/sheet [pc-name]` and `/quaff [pc-name]` — the first two of the ~9 remaining single-PC commands to
-    get the multi-PC treatment: an optional PC-name argument (defaults to the first-rolled PC), same
-    `save.resolve()` pattern as `/attack`/`/outfit`. Each PC already carries their own potions, so
-    `/quaff` naming a specific PC is a real gap this closes, not just cosmetic.
+  - `/sheet [pc-name]`, `/quaff [pc-name]`, and `/prepare [pc-name] <spell>` — three of the ~9 remaining
+    single-PC commands to get the multi-PC treatment: an optional PC-name argument (defaults to the
+    first-rolled PC), same `save.resolve()` pattern as `/attack`/`/outfit`. Each PC already carries their
+    own potions and memorized spells, so naming a specific PC for `/quaff`/`/prepare` closes a real gap,
+    not just cosmetic parity.
 
 All milestones are complete (225 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
@@ -301,9 +302,9 @@ above 9 party members was **already implemented** (`ExplorationService.wandering
 already matched this. Phase 1 (see Milestone 13 above) shipped the rest of the foundation: the data
 model, roster commands, and full combat integration. Still Phase 2+, deferred deliberately rather than
 half-built:
-- **~7 remaining commands** still act only on the first-rolled PC: `/wield`, `/buy`, `/sell`,
-  `/prepare`, `/enter`, `/export`, `/light`. Each needs the same optional-PC-name-argument treatment
-  `/attack`/`/sheet`/`/quaff` already got.
+- **~6 remaining commands** still act only on the first-rolled PC: `/wield`, `/buy`, `/sell`, `/enter`,
+  `/export`, `/light`. Each needs the same optional-PC-name-argument treatment `/attack`/`/sheet`/
+  `/quaff`/`/prepare` already got.
 - **`/autodelve`** doesn't yet make multi-PC autopilot decisions (whose HP triggers a retreat? who
   quaffs a potion?) — its simulation loop threads one PC through every decision today.
 - **The web interface** (`GameFacade`/`StateSnapshot`/`app.js`) still only shows/plays the first PC —
@@ -355,7 +356,7 @@ half-built:
 | `/torchbearer [name]` | View or reassign who's carrying the party's lit torch/lantern. |
 | `/buy <torch\|lantern\|oil> [qty]` | Buy light supplies in town. |
 | `/cast <spell> [target]` | Cast a prepared spell (combat or utility). |
-| `/prepare <spell>` | Memorize a spell into a free slot. |
+| `/prepare [pc-name] <spell>` | Memorize a spell into a free slot — name a caster PC first in a multi-PC party. |
 | `/quaff [pc-name]` | Drink a potion of healing — your first-rolled PC by default, or name a specific PC. |
 | `/town` | Return to town: rest, heal, pay upkeep, re-prepare spells. |
 | `/pregen <class> [level] [name]` | Instantly build a finished character at a level (default 5). |
