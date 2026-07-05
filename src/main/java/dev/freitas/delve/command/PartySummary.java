@@ -34,10 +34,19 @@ public final class PartySummary {
         for (Character pc : save.getCharacters()) {
             boolean isBearer = bearerToken != null && bearerToken.equalsIgnoreCase(save.tokenFor(pc));
             String label = solo ? pc.getName() + " (you)" : pc.getName();
-            sb.append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  %s%n",
+            // In a multi-PC party, each PC's own Charisma can authorize more hires (see HireCommand's
+            // optional pc-name argument) — surface how many more THIS PC could bring on right now, since
+            // it's otherwise hard to tell who to name in `/hire`.
+            String openSlots = "";
+            if (!solo) {
+                int cap = RetainerRules.maxRetainers(pc.getAbilities().score(Ability.CHA));
+                int open = Math.max(0, cap - save.getRetainers().size());
+                openSlots = ", " + open + " open slot" + (open == 1 ? "" : "s");
+            }
+            sb.append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  %s%s%n",
                     label, pc.getLevel(), pc.getCharacterClass().displayName(),
                     pc.getCurrentHp(), pc.getMaxHp(), pc.armorClass(),
-                    rankSummary(fullOrder, width, pc, isBearer, save)));
+                    rankSummary(fullOrder, width, pc, isBearer, save), openSlots));
         }
         for (Retainer r : save.getRetainers()) {
             sb.append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  loyalty %d (%s)  %s%n",

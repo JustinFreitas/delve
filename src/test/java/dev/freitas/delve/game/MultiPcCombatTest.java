@@ -84,6 +84,23 @@ class MultiPcCombatTest {
     }
 
     @Test
+    void partySummaryShowsEachPcsOwnOpenRetainerSlots() {
+        SaveGame save = new SaveGame();
+        Character lowCha = factory.create("Anna", CharacterClass.FIGHTER, new AbilityScores(16, 9, 9, 13, 13, 8)); // cap 3
+        save.setCharacter(lowCha);
+        Character highCha = factory.create("Bram", CharacterClass.CLERIC, new AbilityScores(9, 9, 9, 9, 9, 18)); // cap 7
+        save.addCharacter(highCha);
+        Retainer hench = retainerFactory.create("Hench", CharacterClass.FIGHTER, 1, 9);
+        save.getRetainers().add(hench); // 1 already hired
+
+        String text = PartySummary.text(save);
+
+        // Anna's cap 3 minus the 1 already hired -> 2 open; Bram's cap 7 minus 1 -> 6 open.
+        assertThat(text).contains("2 open slots");
+        assertThat(text).contains("6 open slots");
+    }
+
+    @Test
     void namingAPcInAttackGivesThemTheExplicitTargetWhileOthersAutoAttack() {
         SaveGame save = combatSave(Bestiary.ORC, 3);
         combat.startCombat(save);

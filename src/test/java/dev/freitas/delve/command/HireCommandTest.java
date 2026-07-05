@@ -162,12 +162,59 @@ class HireCommandTest {
         assertThat(save.getRetainers()).containsExactly(hired);
     }
 
+    @Test
+    void fillPartyPicksTheRichestEligiblePayerEachHireAndSwitchesOnceTheyHitTheirCap() {
+        SaveGame save = new SaveGame();
+        Character rich = pc(100_000);
+        rich.setName("Rich");
+        rich.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 8)); // CHA 8 -> cap 3
+        save.setCharacter(rich);
+        Character charismatic = pc(1000);
+        charismatic.setName("Charismatic");
+        charismatic.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 18)); // CHA 18 -> cap 7
+        save.addCharacter(charismatic);
+
+        List<HireCommand.PartyHire> hires = hireCommand.fillParty(save, 9); // 2 PCs + 7 retainers = 9
+
+        assertThat(hires).hasSize(7);
+        assertThat(hires.subList(0, 3)).allMatch(h -> h.payer() == rich);
+        assertThat(hires.subList(3, 7)).allMatch(h -> h.payer() == charismatic);
+        assertThat(save.getRetainers()).hasSize(7);
+    }
+
+    @Test
+    void fillPartyStopsShortWhenNoPcCanAffordOrAuthorizeMore() {
+        SaveGame save = new SaveGame();
+        Character poor = pc(20); // can't afford even one hire (fee 25)
+        poor.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 3)); // CHA 3 -> cap 1
+        save.setCharacter(poor);
+
+        List<HireCommand.PartyHire> hires = hireCommand.fillParty(save, 9);
+
+        assertThat(hires).isEmpty();
+        assertThat(save.getRetainers()).isEmpty();
+    }
+
+    @Test
+    void fillPartyReturnsEmptyWhenAlreadyAtOrAboveTarget() {
+        SaveGame save = new SaveGame();
+        Character pc = pc(1000);
+        save.setCharacter(pc);
+
+        List<HireCommand.PartyHire> hires = hireCommand.fillParty(save, 1); // already 1 member, target 1
+
+        assertThat(hires).isEmpty();
+        assertThat(save.getRetainers()).isEmpty();
+    }
+
     private Character pc(int gold) {
         Character c = new Character();
         c.setName("Hero");
         c.setCharacterClass(CharacterClass.FIGHTER);
         c.setAbilities(new AbilityScores(13, 9, 9, 12, 12, 12));
         c.setGold(gold);
+        c.setMaxHp(10);
+        c.setCurrentHp(10); // alive -- fillParty filters payers via save.livingCharacters()
         return c;
     }
 }

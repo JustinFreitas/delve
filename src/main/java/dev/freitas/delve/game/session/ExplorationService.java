@@ -406,8 +406,8 @@ public class ExplorationService {
 
         // Wandering monster check every other turn (1-in-6, plus an extra roll per additional
         // 8 party members beyond 9).
-        int partySize = 1 + save.livingRetainers().size();
-        if (session.getDungeonTurn() % 2 == 0 && wanderingMonsterTriggered(partySize)) {
+        int size = partySize(save);
+        if (session.getDungeonTurn() % 2 == 0 && wanderingMonsterTriggered(size)) {
             Room room = session.currentRoom();
             if (!room.hasLiveMonster()) {
                 MonsterType type = pickWanderingMonster(session.getCurrentLevel() + 1);
@@ -466,6 +466,12 @@ public class ExplorationService {
             session.setState(SessionState.IN_TOWN);
             result.add("**" + character.getName() + " has died in the dungeon.**");
         }
+    }
+
+    /** Total party size for the wandering-monster check: every living PC plus every living retainer.
+        Package-private: tests exercise this directly. */
+    int partySize(SaveGame save) {
+        return save.livingCharacters().size() + save.livingRetainers().size();
     }
 
     /** Base 1-in-6 wandering-monster check, plus an extra 1-in-6 roll for every additional set of 8

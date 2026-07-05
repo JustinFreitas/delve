@@ -232,8 +232,19 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   hired retainer still joins the one shared, party-wide retainer pool afterward (combat, XP, upkeep,
   desertion are all unchanged). `/party`'s displayed Charisma cap now reflects the highest cap across
   every living PC, matching the new hiring behavior.
+- **Milestone 16** — party-size visibility and a whole-party best-effort hire:
+  - `/party` now shows each PC's own open retainer slots (their Charisma cap minus the party's current
+    retainer count) right on their row, so it's no longer a guessing game which PC to name in `/hire`.
+  - `/hire party [target]` best-effort fills the whole party toward a total headcount (PCs + retainers)
+    — defaults to 9 (the wandering-monster penalty threshold), or a number like `/hire party 18`. Each
+    hire is paid for by whichever living PC currently has the most gold among those who can still afford
+    it and haven't hit their own Charisma cap, stopping short (rather than erroring) once nobody
+    qualifies; the reply reports who paid for each new retainer.
+  - Fixed a pre-existing bug: the wandering-monster check's party-size count was hardcoded to
+    `1 + retainers` (assuming exactly one PC), silently undercounting any multi-PC party and delaying
+    the penalty past its intended threshold. Now counts every living PC.
 
-All milestones are complete (220 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+All milestones are complete (225 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
@@ -330,7 +341,7 @@ half-built:
 | `/open <dir>` | Open or force a door. |
 | `/attack [n]` | Strike in combat (one round); optionally target enemy #n. |
 | `/flee` | Flee combat to an adjacent room. |
-| `/hire [pc-name] <class> [name]` | Recruit a retainer in town, or bulk-hire with `<class> all` / `smart all` / `all` / `random all`; name a PC first to hire using their gold/Charisma. |
+| `/hire [pc-name] <class> [name]` | Recruit a retainer in town, or bulk-hire with `<class> all` / `smart all` / `all` / `random all`; name a PC first to hire using their gold/Charisma. `hire party [target]` best-effort fills the whole party toward a headcount (default 9). |
 | `/party` | List your character and retainers (rank, engagement, weapon class). |
 | `/dismiss <name>` | Release a retainer. |
 | `/order [name1 name2 ...]` | View or set your marching order (front to back). |

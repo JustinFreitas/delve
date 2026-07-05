@@ -13,6 +13,7 @@ import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -89,16 +90,23 @@ public class HireCommand extends Command {
             argsText = argsText.substring(leadSpace + 1).trim();
         }
 
+        String[] tokens = argsText.split("\\s+", 2);
+        String first = tokens.length > 0 ? tokens[0] : "";
+        String rest = tokens.length > 1 ? tokens[1].trim() : "";
+
+        // --- whole-party best-effort fill: "party" is a reserved keyword, spans every PC's gold/CHA,
+        // so it must run before (and skip) the single-payer cap check below. ---
+        if (first.equalsIgnoreCase("party")) {
+            runPartyFill(ctx, save, rest);
+            return;
+        }
+
         int max = RetainerRules.maxRetainers(payer.getAbilities().score(Ability.CHA));
         if (save.getRetainers().size() >= max) {
             ctx.reply((solo ? "Your" : payer.getName() + "'s") + " Charisma supports at most **" + max
                     + "** retainers. Dismiss one first.");
             return;
         }
-
-        String[] tokens = argsText.split("\\s+", 2);
-        String first = tokens.length > 0 ? tokens[0] : "";
-        String rest = tokens.length > 1 ? tokens[1].trim() : "";
 
         // --- bulk-hire dispatch: "all" is a reserved keyword in this position (see provideHelp) ---
         if (first.equalsIgnoreCase("all") && rest.isBlank()) {
@@ -227,11 +235,97 @@ public class HireCommand extends Command {
         };
     }
 
+    /** The wandering-monster penalty threshold (see {@code ExplorationService}) — the sensible default
+        target for {@code hire party} when no number is given. */
+    static final int DEFAULT_PARTY_TARGET = 9;
+
+    record PartyHire(Retainer retainer, Character payer) {}
+
+    /** Best-effort fills the whole party (every living PC's gold/Charisma, not just one payer) toward a
+        target total headcount (PCs + retainers) — e.g. target 9 to reach the wandering-monster penalty
+        threshold, or 18. Each hire is paid for by whichever living PC currently has the most gold among
+        those who can both afford {@link #HIRING_FEE} and haven't hit their own Charisma cap yet
+        (re-checked every iteration, since the shared retainer count keeps growing); stops the moment no
+        PC qualifies rather than erroring, since this is explicitly a best-effort fill. Always uses the
+        smart, tankiest-first class mix — no separate mode selector. Package-private: tests exercise this
+        directly without a {@link CommandContext}. */
+    List<PartyHire> fillParty(SaveGame save, int target) {
+        List<Character> livingPcs = save.livingCharacters();
+        int currentSize = livingPcs.size() + save.getRetainers().size();
+        int needed = target - currentSize;
+        List<PartyHire> hires = new ArrayList<>();
+        if (needed <= 0) {
+            return hires;
+        }
+
+        List<String> pool = new ArrayList<>(NAMES);
+        for (int i = 0; i < needed; i++) {
+            int retainerCount = save.getRetainers().size();
+            Character payer = livingPcs.stream()
+                    .filter(pc -> pc.getGold() >= HIRING_FEE)
+                    .filter(pc -> retainerCount < RetainerRules.maxRetainers(pc.getAbilities().score(Ability.CHA)))
+                    .max(Comparator.comparingInt(Character::getGold))
+                    .orElse(null);
+            if (payer == null) {
+                break; // best effort: no PC can afford/authorize another hire
+            }
+            CharacterClass cls = SMART_HIRE_ORDER.get(i % SMART_HIRE_ORDER.size());
+            String name = pool.isEmpty() ? NAMES.get(dice.d(NAMES.size()) - 1) : pool.remove(dice.d(pool.size()) - 1);
+            hires.add(new PartyHire(hireOne(save, payer, cls, name), payer));
+        }
+        return hires;
+    }
+
+    private void runPartyFill(CommandContext ctx, SaveGame save, String targetArg) {
+        int target = DEFAULT_PARTY_TARGET;
+        if (!targetArg.isBlank()) {
+            try {
+                target = Integer.parseInt(targetArg.trim());
+            } catch (NumberFormatException e) {
+                ctx.reply("Target party size must be a number, e.g. `hire party 9` or `hire party 18`.");
+                return;
+            }
+        }
+
+        int currentSize = save.livingCharacters().size() + save.getRetainers().size();
+        if (target - currentSize <= 0) {
+            ctx.reply("Your party is already at **" + currentSize + "** members — at or above the target "
+                    + "of **" + target + "**. Nothing to hire.");
+            return;
+        }
+
+        List<PartyHire> hires = fillParty(save, target);
+        if (!hires.isEmpty()) {
+            ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);
+        }
+        ctx.reply(formatPartyFillReply(hires, target, currentSize + hires.size()));
+    }
+
+    private String formatPartyFillReply(List<PartyHire> hires, int target, int achievedSize) {
+        if (hires.isEmpty()) {
+            return "Couldn't hire anyone toward a party of **" + target + "** — every PC is either out "
+                    + "of gold or already at their own Charisma cap.";
+        }
+        boolean shortOfTarget = achievedSize < target;
+        StringBuilder sb = new StringBuilder("Hired **" + hires.size() + "** retainer" + (hires.size() == 1 ? "" : "s")
+                + " toward a party of **" + target + "** (now **" + achievedSize + "**"
+                + (shortOfTarget ? ", short of target — every remaining PC is out of gold or at their own "
+                        + "Charisma cap" : "") + ").\n```\n");
+        for (PartyHire hire : hires) {
+            Retainer r = hire.retainer();
+            sb.append(String.format("%-16s %-11s %3d hp  AC %d  loyalty %d (%s)  -- hired by %s%n",
+                    r.getName(), r.getCharacterClass().displayName(), r.getMaxHp(), r.armorClass(),
+                    r.getLoyalty(), RetainerRules.loyaltyDescriptor(r.getLoyalty()), hire.payer().getName()));
+        }
+        return sb.append("```").toString();
+    }
+
     @Override
     public void provideHelp(HelpContext help) {
         help.addUsage("[pc-name] <class> [name]");
         help.addUsage("[pc-name] <class> all");
         help.addUsage("[pc-name] [smart|random] all");
+        help.addUsage("party [target]");
         help.addDescription("Hires a retainer to adventure with you (in town). They fight alongside you "
                 + "and earn a half-share of XP. Your Charisma caps how many you can lead. In a multi-PC "
                 + "party, name a PC first to hire using their gold and Charisma instead of your "
@@ -240,5 +334,10 @@ public class HireCommand extends Command {
                 + " gp/head): `<class> all` hires one class throughout, `smart all` (also just `all` — the "
                 + "default) picks a front-loaded, tankiest-first mix, `random all` picks a uniformly random "
                 + "class per slot. \"all\" is reserved here and can't be used as a retainer's name.");
+        help.addDescription("`hire party [target]` best-effort fills the whole party toward a total "
+                + "headcount (PCs + retainers) — defaults to " + DEFAULT_PARTY_TARGET + " (the wandering-"
+                + "monster penalty threshold), or give a number like `hire party 18`. Spends whichever "
+                + "living PC's gold/Charisma can still afford each hire, richest first, and reports who "
+                + "paid for each retainer. \"party\" is reserved here too.");
     }
 }
