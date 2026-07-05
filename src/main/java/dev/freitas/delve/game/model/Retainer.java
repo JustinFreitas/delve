@@ -37,6 +37,10 @@ public class Retainer implements Combatant, Advanceable {
     private int loyalty = 7;
     private boolean fled;
 
+    // The owning PC's name; null for legacy retainers hired before ownership existed (see
+    // SaveGame.ownerOf, which falls back to the primary PC for these).
+    private String owner;
+
     public Retainer() {}
 
     @Override
@@ -192,5 +196,17 @@ public class Retainer implements Combatant, Advanceable {
 
     public void setFled(boolean fled) {
         this.fled = fled;
+    }
+
+    /** The raw stored owner name — may be {@code null} (a legacy retainer hired before ownership
+        existed) or name a PC no longer in the save. Prefer {@link SaveGame#ownerOf(Retainer)} over
+        calling this directly; it resolves both of those cases to the primary PC instead of leaving you
+        to handle {@code null}/stale names yourself. */
+    public String getOwner() {
+        return owner;
+    }
+
+    public void setOwner(String owner) {
+        this.owner = owner;
     }
 }

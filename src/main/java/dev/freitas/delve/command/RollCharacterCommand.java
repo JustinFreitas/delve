@@ -74,6 +74,14 @@ public class RollCharacterCommand extends Command {
                     + "** characters. `dismiss` one first.");
             return;
         }
+        // A second+ PC left unnamed defaults to the player's own Discord display name (above) -- the
+        // same name every time, for the same player -- which would silently break name-based ownership
+        // lookups (SaveGame.ownerOf/resolve) between this PC and any earlier one sharing it.
+        if (!firstPc && nameCollides(existing, name)) {
+            ctx.reply("**" + name + "** is already a name in your party — every PC and retainer needs "
+                    + "a distinct name. Try `" + ctx.getTrigger() + " " + classToken + " <a different name>`.");
+            return;
+        }
 
         Character character = characterFactory.createBare(name, characterClass, abilities);
         spells.autoPrepare(character); // a fresh caster is ready to cast (no-op for non-casters)
@@ -106,6 +114,15 @@ public class RollCharacterCommand extends Command {
                         + "your first-rolled PC only; naming a specific PC for those is coming soon).";
         ctx.reply(reply);
         ctx.replyEmbed(CharacterSheets.embed(character));
+    }
+
+    /** Whether {@code name} collides (case-insensitively) with any PC or retainer already in
+        {@code save} — checked before adding a second+ PC, since name-based ownership lookups
+        ({@link SaveGame#ownerOf}, {@link SaveGame#resolve}) require every party member's name to be
+        unique. Package-private: tests exercise this directly without a {@link CommandContext}. */
+    static boolean nameCollides(SaveGame save, String name) {
+        return save.getCharacters().stream().anyMatch(c -> c.getName().equalsIgnoreCase(name))
+                || save.getRetainers().stream().anyMatch(r -> r.getName().equalsIgnoreCase(name));
     }
 
     private String classListMessage() {

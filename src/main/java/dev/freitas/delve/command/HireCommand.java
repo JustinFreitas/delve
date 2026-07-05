@@ -82,13 +82,9 @@ public class HireCommand extends Command {
 
         // An optional leading PC-name says whose gold pays the hiring fee and whose Charisma governs
         // the loyalty roll and retainer-count cap for this hire, in a multi-PC party.
-        Character payer = save.getCharacter();
-        int leadSpace = argsText.indexOf(' ');
-        String leadToken = leadSpace > 0 ? argsText.substring(0, leadSpace) : argsText;
-        if (leadSpace > 0 && save.resolve(leadToken) instanceof Character named) {
-            payer = named;
-            argsText = argsText.substring(leadSpace + 1).trim();
-        }
+        SaveGame.PcNameToken peeled = save.peelLeadingPcName(argsText, save.getCharacter());
+        Character payer = peeled.actor();
+        argsText = peeled.remainder();
 
         String[] tokens = argsText.split("\\s+", 2);
         String first = tokens.length > 0 ? tokens[0] : "";
@@ -101,8 +97,8 @@ public class HireCommand extends Command {
             return;
         }
 
-        int max = RetainerRules.maxRetainers(payer.getAbilities().score(Ability.CHA));
-        if (save.getRetainers().size() >= max) {
+        int max = save.retainerCapFor(payer);
+        if (save.atRetainerCap(payer)) {
             ctx.reply((solo ? "Your" : payer.getName() + "'s") + " Charisma supports at most **" + max
                     + "** retainers. Dismiss one first.");
             return;
@@ -169,6 +165,7 @@ public class HireCommand extends Command {
     Retainer hireOne(SaveGame save, Character payer, CharacterClass cls, String name) {
         int loyalty = RetainerRules.baseLoyalty(payer.getAbilities().score(Ability.CHA));
         Retainer retainer = retainerFactory.create(name, cls, 1, loyalty);
+        retainer.setOwner(payer.getName());
         int banked = dice.roll(3, 6);
         payer.setGold(payer.getGold() - HIRING_FEE + banked);
         save.getRetainers().add(retainer);
@@ -204,7 +201,7 @@ public class HireCommand extends Command {
                     + (solo ? "you have" : pc.getName() + " has") + " " + pc.getGold() + " gp.");
             return;
         }
-        int count = Math.min(slotsAvailable(max, save.getRetainers().size()), affordable);
+        int count = Math.min(slotsAvailable(max, save.retainersOwnedBy(pc).size()), affordable);
         int goldBefore = pc.getGold();
         List<Retainer> hired = bulkHire(save, pc, mode, fixedClass, count);
         // Fees paid, offset by each retainer's banked coin joining the party's purse.
@@ -260,10 +257,9 @@ public class HireCommand extends Command {
 
         List<String> pool = new ArrayList<>(NAMES);
         for (int i = 0; i < needed; i++) {
-            int retainerCount = save.getRetainers().size();
             Character payer = livingPcs.stream()
                     .filter(pc -> pc.getGold() >= HIRING_FEE)
-                    .filter(pc -> retainerCount < RetainerRules.maxRetainers(pc.getAbilities().score(Ability.CHA)))
+                    .filter(pc -> save.retainersOwnedBy(pc).size() < RetainerRules.maxRetainers(pc.getAbilities().score(Ability.CHA)))
                     .max(Comparator.comparingInt(Character::getGold))
                     .orElse(null);
             if (payer == null) {

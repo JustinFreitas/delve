@@ -305,8 +305,8 @@ public class GameFacade {
             return fail(save, "You can only hire retainers in town.");
         }
         Character pc = save.getCharacter();
-        int max = RetainerRules.maxRetainers(pc.getAbilities().score(Ability.CHA));
-        if (save.getRetainers().size() >= max) {
+        int max = save.retainerCapFor(pc);
+        if (save.atRetainerCap(pc)) {
             return fail(save, "Your Charisma supports at most " + max + " retainers.");
         }
         CharacterClass cls = CharacterClass.parse(classToken);
@@ -319,6 +319,7 @@ public class GameFacade {
         String hireName = blankToNull(name) != null ? name.trim() : cls.displayName() + " hireling";
         int loyalty = RetainerRules.baseLoyalty(pc.getAbilities().score(Ability.CHA));
         Retainer retainer = retainerFactory.create(hireName, cls, 1, loyalty);
+        retainer.setOwner(pc.getName());
         pc.setGold(pc.getGold() - HIRING_FEE);
         save.getRetainers().add(retainer);
         gameState.save(userId, save);
@@ -335,7 +336,7 @@ public class GameFacade {
         List<String> lines = new ArrayList<>();
         lines.add(pc.getName() + " (you) — L" + pc.getLevel() + " " + pc.getCharacterClass().displayName()
                 + ", " + pc.getCurrentHp() + "/" + pc.getMaxHp() + " hp, AC " + pc.armorClass());
-        for (Retainer r : save.getRetainers()) {
+        for (Retainer r : save.retainersOwnedBy(pc)) {
             lines.add(r.getName() + " — L" + r.getLevel() + " " + r.getCharacterClass().displayName()
                     + ", " + r.getCurrentHp() + "/" + r.getMaxHp() + " hp, AC " + r.armorClass()
                     + ", loyalty " + r.getLoyalty() + " (" + RetainerRules.loyaltyDescriptor(r.getLoyalty()) + ")");
@@ -354,6 +355,11 @@ public class GameFacade {
                 .orElse(null);
         if (match == null) {
             return fail(save, "No retainer named '" + name + "'.");
+        }
+        Character pc = save.getCharacter();
+        if (save.ownerOf(match) != pc) {
+            return fail(save, "'" + match.getName() + "' is " + save.ownerOf(match).getName()
+                    + "'s retainer, not yours.");
         }
         save.getRetainers().remove(match);
         gameState.save(userId, save);

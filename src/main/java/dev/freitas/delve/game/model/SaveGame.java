@@ -2,7 +2,9 @@ package dev.freitas.delve.game.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.Combatant;
+import dev.freitas.delve.game.engine.RetainerRules;
 import dev.freitas.delve.game.engine.Toughness;
 
 /**
@@ -27,6 +29,14 @@ public class SaveGame {
         members so column indices in {@link dev.freitas.delve.game.engine.Formation} stay stable as
         people fall. */
     private java.util.List<String> marchingOrder = new java.util.ArrayList<>();
+
+    /** Wall-clock epoch millis of the party's last real (non-simulated) town visit — see {@code
+        TownService#returnToTown}, which caps rest days by real elapsed time since this. Null before the
+        first real town visit ever resolves; {@code TownService} treats that the same as "now" (no
+        backlog), matching the dynamic-fallback pattern used elsewhere for pre-existing saves. Simulated
+        rests ({@code TownService#simulateReturnToTown}, used by {@code AutodelveService}'s compressed
+        multi-delve runs) never read or write this. */
+    private Long lastTownVisitMillis;
 
     public SaveGame() {}
 
@@ -122,6 +132,14 @@ public class SaveGame {
         this.marchingOrder = marchingOrder;
     }
 
+    public Long getLastTownVisitMillis() {
+        return lastTownVisitMillis;
+    }
+
+    public void setLastTownVisitMillis(Long lastTownVisitMillis) {
+        this.lastTownVisitMillis = lastTownVisitMillis;
+    }
+
     /**
      * The whole party (every PC + every retainer, alive or dead) in marching-order sequence — the list
      * {@link dev.freitas.delve.game.engine.Formation} groups into ranks/columns. Dead members are kept in
@@ -205,6 +223,72 @@ public class SaveGame {
             return characters.size() == 1 ? PLAYER_SLOT : character.getName();
         }
         return c.getName();
+    }
+
+    /** The PC that owns {@code r}: the retainer's stored owner name resolved to a live {@link
+        Character} in this save (case-insensitive, matching {@link #resolve}'s convention), falling
+        back to the primary PC ({@link #getCharacter()}) when the retainer predates ownership (owner
+        is null/blank) or its stored owner name no longer matches any current PC. */
+    @JsonIgnore
+    public Character ownerOf(Retainer r) {
+        String name = r.getOwner();
+        if (name != null && !name.isBlank()) {
+            for (Character c : characters) {
+                if (c.getName().equalsIgnoreCase(name)) {
+                    return c;
+                }
+            }
+        }
+        return getCharacter();
+    }
+
+    /** Every retainer owned by {@code pc}, per {@link #ownerOf} (identity comparison against {@code
+        pc}, not name comparison, so this can't be confused by two PCs sharing a name). */
+    @JsonIgnore
+    public java.util.List<Retainer> retainersOwnedBy(Character pc) {
+        java.util.List<Retainer> owned = new java.util.ArrayList<>();
+        for (Retainer r : retainers) {
+            if (ownerOf(r) == pc) {
+                owned.add(r);
+            }
+        }
+        return owned;
+    }
+
+    /** This PC's Charisma-based retainer cap (see {@link RetainerRules#maxRetainers}). */
+    @JsonIgnore
+    public int retainerCapFor(Character pc) {
+        return RetainerRules.maxRetainers(pc.getAbilities().score(Ability.CHA));
+    }
+
+    /** Whether {@code pc} has hit their own Charisma-based retainer cap and cannot hire another right
+        now — the single source of truth for this rule, shared by every hire path ({@code HireCommand},
+        {@code GameFacade}) instead of each re-deriving it from {@link #retainersOwnedBy} and
+        {@link RetainerRules#maxRetainers} independently. */
+    @JsonIgnore
+    public boolean atRetainerCap(Character pc) {
+        return retainersOwnedBy(pc).size() >= retainerCapFor(pc);
+    }
+
+    /** The result of {@link #peelLeadingPcName}: the resolved acting PC and the remaining argument
+        text with that leading token removed (unchanged if nothing was peeled). */
+    public record PcNameToken(Character actor, String remainder) {}
+
+    /** Peels an optional leading PC-name token off {@code argsText}, for commands that accept an
+        optional {@code [pc-name] ...} prefix in a multi-PC party (see {@code /hire}, {@code /dismiss}):
+        if the text up to the first space resolves to a live PC via {@link #resolve}, that PC becomes
+        the actor and the trimmed remainder is returned; otherwise {@code defaultActor} and the full
+        text are returned unchanged. Callers whose remaining argument shape could itself contain a
+        space-separated value matching a PC's name (e.g. a multi-word retainer name) should check that
+        case first and skip calling this when it applies. */
+    @JsonIgnore
+    public PcNameToken peelLeadingPcName(String argsText, Character defaultActor) {
+        int leadSpace = argsText.indexOf(' ');
+        String leadToken = leadSpace > 0 ? argsText.substring(0, leadSpace) : argsText;
+        if (leadSpace > 0 && resolve(leadToken) instanceof Character named) {
+            return new PcNameToken(named, argsText.substring(leadSpace + 1).trim());
+        }
+        return new PcNameToken(defaultActor, argsText);
     }
 
     private String keyFor(Combatant c) {

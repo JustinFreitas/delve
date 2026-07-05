@@ -67,9 +67,11 @@ class MultiPcCombatTest {
     }
 
     @Test
-    void partySummaryShowsTheHighestRetainerCapAcrossEveryPc() {
-        // Any living PC's Charisma can authorize a hire (HireCommand's optional pc-name argument), so
-        // the real reachable ceiling is the max cap across the whole party, not just the first PC's.
+    void partySummaryShowsTheSumOfEveryPcsOwnRetainerCap() {
+        // Each PC's Charisma cap is enforced independently (SaveGame#atRetainerCap) -- every PC can fill
+        // their own cap regardless of what anyone else has hired -- so the party's real reachable
+        // ceiling is the SUM of every PC's own cap, not just the highest single one (a plain max would
+        // under-report how many retainers the party could legitimately end up with).
         SaveGame save = new SaveGame();
         Character lowCha = factory.create("Anna", CharacterClass.FIGHTER, new AbilityScores(16, 9, 9, 13, 13, 3));
         save.setCharacter(lowCha);
@@ -78,9 +80,36 @@ class MultiPcCombatTest {
 
         String text = PartySummary.text(save);
 
-        int expectedMax = RetainerRules.maxRetainers(18);
-        assertThat(RetainerRules.maxRetainers(3)).isLessThan(expectedMax); // sanity: Anna alone would be lower
-        assertThat(text).contains("0/" + expectedMax + " (Charisma cap)");
+        int expectedSum = RetainerRules.maxRetainers(3) + RetainerRules.maxRetainers(18);
+        assertThat(text).contains("0/" + expectedSum + " (Charisma cap)");
+    }
+
+    @Test
+    void partySummaryAggregateCapCanActuallyHoldWhatThePartyLegitimatelyHires() {
+        // Regression: under the old max-of-caps aggregate, two CHA-18 PCs each independently filling
+        // their own 7-slot cap (14 retainers total, legitimate under the per-owner cap enforced
+        // elsewhere) would have shown a nonsensical "14/7". The sum-based cap must actually be able to
+        // contain everyone the party could legitimately hire.
+        SaveGame save = new SaveGame();
+        Character anna = factory.create("Anna", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 18)); // cap 7
+        save.setCharacter(anna);
+        Character bram = factory.create("Bram", CharacterClass.CLERIC, new AbilityScores(9, 9, 9, 9, 9, 18)); // cap 7
+        save.addCharacter(bram);
+        for (int i = 0; i < 7; i++) {
+            Retainer r = retainerFactory.create("AnnaHench" + i, CharacterClass.FIGHTER, 1, 9);
+            r.setOwner("Anna");
+            save.getRetainers().add(r);
+        }
+        for (int i = 0; i < 7; i++) {
+            Retainer r = retainerFactory.create("BramHench" + i, CharacterClass.CLERIC, 1, 9);
+            r.setOwner("Bram");
+            save.getRetainers().add(r);
+        }
+
+        String text = PartySummary.text(save);
+
+        assertThat(save.getRetainers()).hasSize(14);
+        assertThat(text).contains("14/14 (Charisma cap)"); // not the old, impossible-looking "14/7"
     }
 
     @Test
@@ -90,14 +119,43 @@ class MultiPcCombatTest {
         save.setCharacter(lowCha);
         Character highCha = factory.create("Bram", CharacterClass.CLERIC, new AbilityScores(9, 9, 9, 9, 9, 18)); // cap 7
         save.addCharacter(highCha);
-        Retainer hench = retainerFactory.create("Hench", CharacterClass.FIGHTER, 1, 9);
-        save.getRetainers().add(hench); // 1 already hired
+        // Anna owns 2 retainers, Bram owns 1 -- each PC's open-slot count must be against their OWN
+        // retainers, not the whole party's total (that old bug would say Bram has 7-3=4 open, not 6).
+        Retainer annaHench1 = retainerFactory.create("AnnaHench1", CharacterClass.FIGHTER, 1, 9);
+        annaHench1.setOwner("Anna");
+        Retainer annaHench2 = retainerFactory.create("AnnaHench2", CharacterClass.FIGHTER, 1, 9);
+        annaHench2.setOwner("Anna");
+        Retainer bramHench = retainerFactory.create("BramHench", CharacterClass.CLERIC, 1, 9);
+        bramHench.setOwner("Bram");
+        save.getRetainers().add(annaHench1);
+        save.getRetainers().add(annaHench2);
+        save.getRetainers().add(bramHench);
 
         String text = PartySummary.text(save);
 
-        // Anna's cap 3 minus the 1 already hired -> 2 open; Bram's cap 7 minus 1 -> 6 open.
-        assertThat(text).contains("2 open slots");
+        // Anna's cap 3 minus her own 2 -> 1 open; Bram's cap 7 minus his own 1 -> 6 open.
+        assertThat(text).contains("1 open slot");
         assertThat(text).contains("6 open slots");
+    }
+
+    @Test
+    void partySummaryGroupsRetainersUnderTheirOwningPc() {
+        SaveGame save = new SaveGame();
+        save.setCharacter(hero("Anna", 60));
+        save.addCharacter(hero("Bram", 60));
+        Retainer annaHench = retainerFactory.create("AnnaHench", CharacterClass.FIGHTER, 1, 9);
+        annaHench.setOwner("Anna");
+        Retainer bramHench = retainerFactory.create("BramHench", CharacterClass.CLERIC, 1, 9);
+        bramHench.setOwner("Bram");
+        // Insertion order deliberately not owner order, to prove grouping isn't just insertion-order luck.
+        save.getRetainers().add(bramHench);
+        save.getRetainers().add(annaHench);
+
+        String text = PartySummary.text(save);
+
+        // Grouped by owner: Anna's row, then AnnaHench, then Bram's row -- not the old flat "every PC,
+        // then every retainer" layout, which would put both retainers after both PC rows.
+        assertThat(text.indexOf("AnnaHench")).isLessThan(text.indexOf("Bram"));
     }
 
     @Test

@@ -56,5 +56,8 @@ public class TownCommand extends Command {
                 + DEFAULT_REST_DAYS + " days — a shorter stay heals less), pays retainer upkeep, and "
                 + "re-prepares spells. A retainer who fled a fight has only a 3-in-6 chance of making it "
                 + "back at all.");
+        help.addDescription("Healing is capped by how much real time has actually passed since your "
+                + "last town visit — typing a big number doesn't buy free rest; the reply says if your "
+                + "stay was cut short.");
     }
 }

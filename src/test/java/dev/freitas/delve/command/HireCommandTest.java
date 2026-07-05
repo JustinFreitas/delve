@@ -160,6 +160,32 @@ class HireCommandTest {
         assertThat(charismatic.getGold()).isLessThan(200); // fee deducted from the named payer...
         assertThat(leader.getGold()).isEqualTo(1000); // ...not from the party's first-rolled PC
         assertThat(save.getRetainers()).containsExactly(hired);
+        assertThat(hired.getOwner()).isEqualTo(charismatic.getName());
+    }
+
+    @Test
+    void fillPartyDoesNotLetOnePcsOwnedRetainersBlockAnothersOwnCap() {
+        SaveGame save = new SaveGame();
+        Character a = pc(1000);
+        a.setName("A");
+        a.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 8)); // CHA 8 -> cap 3
+        save.setCharacter(a);
+        Character b = pc(1000);
+        b.setName("B");
+        b.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 5)); // CHA 5 -> cap 2
+        save.addCharacter(b);
+
+        // Fill A up to A's own cap (3) first, simulating retainers A already hired individually.
+        hireCommand.hireOne(save, a, CharacterClass.FIGHTER, "A1");
+        hireCommand.hireOne(save, a, CharacterClass.FIGHTER, "A2");
+        hireCommand.hireOne(save, a, CharacterClass.FIGHTER, "A3");
+
+        // Under the old whole-party-total cap check, A's 3 owned retainers would already meet/exceed
+        // B's own cap of 2 too, wrongly blocking B from ever being picked. B must still be eligible.
+        List<HireCommand.PartyHire> hires = hireCommand.fillParty(save, 2 + 3 + 1);
+
+        assertThat(hires).hasSize(1);
+        assertThat(hires.get(0).payer()).isEqualTo(b);
     }
 
     @Test

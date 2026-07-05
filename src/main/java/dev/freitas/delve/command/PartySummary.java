@@ -1,6 +1,5 @@
 package dev.freitas.delve.command;
 
-import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Hands;
@@ -18,12 +17,12 @@ public final class PartySummary {
     private PartySummary() {}
 
     public static String text(SaveGame save) {
-        // Any living PC's Charisma can authorize a hire (see HireCommand's optional pc-name argument),
-        // so the party's real reachable ceiling is the highest cap across every living PC, not just the
-        // first-rolled one.
+        // Each PC's Charisma cap is enforced independently (see SaveGame#atRetainerCap) -- every PC can
+        // fill their own cap regardless of what anyone else in the party has hired -- so the party's real
+        // reachable ceiling is the SUM of every PC's own cap, not just the highest single one.
         int max = save.getCharacters().stream()
-                .mapToInt(c -> RetainerRules.maxRetainers(c.getAbilities().score(Ability.CHA)))
-                .max().orElse(0);
+                .mapToInt(save::retainerCapFor)
+                .sum();
         int width = save.getSession().isInDungeon() ? save.getSession().currentRoom().getCorridorWidth() : 3;
         List<Combatant> fullOrder = save.fullOrder();
         boolean solo = save.getCharacters().size() == 1;
@@ -39,21 +38,23 @@ public final class PartySummary {
             // it's otherwise hard to tell who to name in `/hire`.
             String openSlots = "";
             if (!solo) {
-                int cap = RetainerRules.maxRetainers(pc.getAbilities().score(Ability.CHA));
-                int open = Math.max(0, cap - save.getRetainers().size());
+                int open = Math.max(0, save.retainerCapFor(pc) - save.retainersOwnedBy(pc).size());
                 openSlots = ", " + open + " open slot" + (open == 1 ? "" : "s");
             }
             sb.append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  %s%s%n",
                     label, pc.getLevel(), pc.getCharacterClass().displayName(),
                     pc.getCurrentHp(), pc.getMaxHp(), pc.armorClass(),
                     rankSummary(fullOrder, width, pc, isBearer, save), openSlots));
-        }
-        for (Retainer r : save.getRetainers()) {
-            sb.append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  loyalty %d (%s)  %s%n",
-                    r.getName(), r.getLevel(), r.getCharacterClass().displayName(),
-                    r.getCurrentHp(), r.getMaxHp(), r.armorClass(),
-                    r.getLoyalty(), RetainerRules.loyaltyDescriptor(r.getLoyalty()),
-                    rankSummary(fullOrder, width, r, bearerToken != null && bearerToken.equalsIgnoreCase(r.getName()), save)));
+            // Each PC's own retainers are grouped right under their row, rather than one flat trailing
+            // list, now that retainers have a real owner.
+            String indent = solo ? "" : "  ";
+            for (Retainer r : save.retainersOwnedBy(pc)) {
+                sb.append(indent).append(String.format("%-16s L%-2d %-11s %3d/%-3d hp  AC %d  loyalty %d (%s)  %s%n",
+                        r.getName(), r.getLevel(), r.getCharacterClass().displayName(),
+                        r.getCurrentHp(), r.getMaxHp(), r.armorClass(),
+                        r.getLoyalty(), RetainerRules.loyaltyDescriptor(r.getLoyalty()),
+                        rankSummary(fullOrder, width, r, bearerToken != null && bearerToken.equalsIgnoreCase(r.getName()), save)));
+            }
         }
         sb.append("```");
         sb.append("Retainers: ").append(save.getRetainers().size()).append("/").append(max)

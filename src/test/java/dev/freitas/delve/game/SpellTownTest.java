@@ -7,6 +7,7 @@ import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Encumbrance;
+import dev.freitas.delve.game.engine.GameClock;
 import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.engine.SpellTables;
 import dev.freitas.delve.game.model.Character;
@@ -22,6 +23,7 @@ import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
+import dev.freitas.delve.game.session.ExplorationResult;
 import dev.freitas.delve.game.session.SpellService;
 import dev.freitas.delve.game.session.TownService;
 import java.util.List;
@@ -30,12 +32,21 @@ import org.junit.jupiter.api.Test;
 
 class SpellTownTest {
 
+    private static final long DAY_MILLIS = 24L * 60 * 60 * 1000;
+
     private final Dice dice = new Dice(new Random(31));
     private final SpellService spells = new SpellService(dice);
     private final CombatService combat = new CombatService(dice, spells);
-    private final TownService town = new TownService(spells, dice);
+    private final TownService town = new TownService(spells, dice, new GameClock());
     private final CharacterFactory factory = new CharacterFactory(dice);
     private final RetainerFactory retainerFactory = new RetainerFactory(dice);
+
+    /** Backdates a save's last-real-town-visit clock so {@link TownService}'s real-time rest cap
+        doesn't bind in tests that want to exercise a specific number of healing days -- a 1-minute
+        buffer keeps the elapsed-day floor from flaking due to test execution time. */
+    private static void allowRestDays(SaveGame save, int days) {
+        save.setLastTownVisitMillis(System.currentTimeMillis() - days * DAY_MILLIS - 60_000);
+    }
 
     // --- Spell tables ------------------------------------------------------
 
@@ -127,6 +138,7 @@ class SpellTownTest {
         // Put the party in a dungeon to prove /town abandons it.
         save.getSession().setDungeon(simpleDungeon());
         save.getSession().setState(SessionState.EXPLORING);
+        allowRestDays(save, 7); // a full week has actually passed in real time
 
         int goldBefore = mu.getGold();
         town.returnToTown(save); // defaults to a full week's rest
@@ -148,13 +160,14 @@ class SpellTownTest {
         int fullyHealed = 0;
         for (int seed = 0; seed < trials; seed++) {
             Dice localDice = new Dice(new Random(seed));
-            TownService localTown = new TownService(new SpellService(localDice), localDice);
+            TownService localTown = new TownService(new SpellService(localDice), localDice, new GameClock());
             SaveGame save = new SaveGame();
             Character hero = new CharacterFactory(localDice)
                     .create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
             hero.setMaxHp(50);
             hero.setCurrentHp(1);
             save.setCharacter(hero);
+            allowRestDays(save, 1);
 
             localTown.returnToTown(save, 1);
             if (hero.getCurrentHp() >= hero.getMaxHp()) {
@@ -171,6 +184,7 @@ class SpellTownTest {
         hero.setMaxHp(6);
         hero.setCurrentHp(1);
         save.setCharacter(hero);
+        allowRestDays(save, 10);
 
         town.returnToTown(save, 10); // way more than the 5-hp gap needs even at 1 hp/day
 
@@ -185,7 +199,7 @@ class SpellTownTest {
         int lost = 0;
         for (int seed = 0; seed < 100; seed++) {
             Dice localDice = new Dice(new Random(seed));
-            TownService localTown = new TownService(new SpellService(localDice), localDice);
+            TownService localTown = new TownService(new SpellService(localDice), localDice, new GameClock());
             SaveGame save = new SaveGame();
             Character hero = new CharacterFactory(localDice)
                     .create("Hero", CharacterClass.FIGHTER, new AbilityScores(12, 9, 9, 12, 12, 9));
@@ -214,11 +228,147 @@ class SpellTownTest {
         save.setCharacter(pc);
         Retainer hench = retainerFactory.create("Bryn", CharacterClass.FIGHTER, 1, 8);
         save.getRetainers().add(hench);
+        allowRestDays(save, 1); // upkeep is only charged on a real (>0-day) visit
 
         town.returnToTown(save);
         // Either loyalty dropped, or (if already low) they quit.
         boolean penalized = save.getRetainers().isEmpty() || hench.getLoyalty() == 7;
         assertThat(penalized).isTrue();
+    }
+
+    @Test
+    void multiPcUpkeepChargesEachOwnersOwnGoldForTheirOwnRetainers() {
+        SaveGame save = new SaveGame();
+        Character anna = factory.create("Anna", CharacterClass.FIGHTER, new AbilityScores(12, 9, 9, 12, 12, 9));
+        anna.setGold(10); // exactly covers her own one retainer's upkeep
+        save.setCharacter(anna);
+        Character bram = factory.create("Bram", CharacterClass.CLERIC, new AbilityScores(9, 9, 9, 9, 9, 9));
+        bram.setGold(10); // exactly covers his own one retainer's upkeep
+        save.addCharacter(bram);
+        Retainer annaHench = retainerFactory.create("AnnaHench", CharacterClass.FIGHTER, 1, 9);
+        annaHench.setOwner("Anna");
+        Retainer bramHench = retainerFactory.create("BramHench", CharacterClass.CLERIC, 1, 9);
+        bramHench.setOwner("Bram");
+        save.getRetainers().add(annaHench);
+        save.getRetainers().add(bramHench);
+        allowRestDays(save, 1); // upkeep is only charged on a real (>0-day) visit
+
+        town.returnToTown(save);
+
+        assertThat(anna.getGold()).isZero();
+        assertThat(bram.getGold()).isZero();
+        // Both fully paid from their own owner's gold -- nobody quits.
+        assertThat(save.getRetainers()).containsExactlyInAnyOrder(annaHench, bramHench);
+    }
+
+    @Test
+    void unpaidRetainersOnlyPenalizeTheirOwnOwnersRetainers() {
+        SaveGame save = new SaveGame();
+        Character rich = factory.create("Rich", CharacterClass.FIGHTER, new AbilityScores(12, 9, 9, 12, 12, 9));
+        rich.setGold(1000);
+        save.setCharacter(rich);
+        Character broke = factory.create("Broke", CharacterClass.CLERIC, new AbilityScores(9, 9, 9, 9, 9, 9));
+        broke.setGold(0);
+        save.addCharacter(broke);
+        Retainer richHench = retainerFactory.create("RichHench", CharacterClass.FIGHTER, 1, 8);
+        richHench.setOwner("Rich");
+        Retainer brokeHench = retainerFactory.create("BrokeHench", CharacterClass.CLERIC, 1, 8);
+        brokeHench.setOwner("Broke");
+        save.getRetainers().add(richHench);
+        save.getRetainers().add(brokeHench);
+        allowRestDays(save, 1); // upkeep is only charged on a real (>0-day) visit
+
+        town.returnToTown(save);
+
+        // Rich fully pays -- their retainer is completely unaffected by Broke's inability to pay.
+        assertThat(richHench.getLoyalty()).isEqualTo(8);
+        boolean brokeHenchPenalized = !save.getRetainers().contains(brokeHench) || brokeHench.getLoyalty() < 8;
+        assertThat(brokeHenchPenalized).isTrue();
+    }
+
+    @Test
+    void multiPcRestHealsEveryPcNotJustThePrimary() {
+        SaveGame save = new SaveGame();
+        Character anna = factory.create("Anna", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
+        anna.setMaxHp(6);
+        anna.setCurrentHp(1);
+        save.setCharacter(anna);
+        Character bram = factory.create("Bram", CharacterClass.CLERIC, new AbilityScores(9, 9, 9, 9, 9, 9));
+        bram.setMaxHp(6);
+        bram.setCurrentHp(1);
+        save.addCharacter(bram);
+        allowRestDays(save, 10);
+
+        town.returnToTown(save, 10); // way more than the 5-hp gap needs even at 1 hp/day
+
+        assertThat(anna.getCurrentHp()).isEqualTo(anna.getMaxHp());
+        assertThat(bram.getCurrentHp()).isEqualTo(bram.getMaxHp()); // this PC used to never get healed
+    }
+
+    @Test
+    void freshSaveGrantsNoBacklogHealingOnItsVeryFirstTownVisit() {
+        SaveGame save = new SaveGame();
+        Character hero = factory.create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
+        hero.setMaxHp(50);
+        hero.setCurrentHp(1);
+        save.setCharacter(hero);
+        // lastTownVisitMillis is null -- no real town visit has ever resolved for this save.
+
+        ExplorationResult result = town.returnToTown(save);
+
+        assertThat(hero.getCurrentHp()).isEqualTo(1); // no real time has passed yet, so no healing
+        assertThat(result.text()).contains("No real time has passed");
+    }
+
+    @Test
+    void zeroDayVisitChargesNoRetainerUpkeepEither() {
+        // A rapid repeat /town (e.g. a double-submit) that resolves to 0 real days shouldn't bill
+        // upkeep a second time for a "visit" that granted no benefit.
+        SaveGame save = new SaveGame();
+        Character pc = factory.create("Hero", CharacterClass.FIGHTER, new AbilityScores(12, 9, 9, 12, 12, 9));
+        pc.setGold(100);
+        save.setCharacter(pc);
+        Retainer hench = retainerFactory.create("Bryn", CharacterClass.FIGHTER, 1, 9);
+        save.getRetainers().add(hench);
+        // lastTownVisitMillis is null -- no real town visit has ever resolved for this save.
+
+        ExplorationResult result = town.returnToTown(save);
+
+        assertThat(pc.getGold()).isEqualTo(100);
+        assertThat(result.text()).doesNotContain("gp in retainer upkeep");
+    }
+
+    @Test
+    void restIsCappedByRealElapsedTimeNotTheRequestedDayCount() {
+        SaveGame save = new SaveGame();
+        Character hero = factory.create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
+        hero.setMaxHp(200);
+        hero.setCurrentHp(1);
+        save.setCharacter(hero);
+        allowRestDays(save, 2); // only 2 real days have actually passed
+
+        ExplorationResult result = town.returnToTown(save, 30); // ask for far more than that
+
+        assertThat(hero.getCurrentHp()).isLessThanOrEqualTo(1 + 2 * 3); // at most 2 days of 1d3 healing
+        assertThat(result.text()).contains("Only 2 days have passed");
+    }
+
+    @Test
+    void restBanksLeftoverRealTimeAcrossMultipleVisits() {
+        SaveGame save = new SaveGame();
+        Character hero = factory.create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
+        hero.setMaxHp(200);
+        hero.setCurrentHp(1);
+        save.setCharacter(hero);
+        allowRestDays(save, 10); // 10 real days available
+
+        town.returnToTown(save, 3); // only spend 3 of the 10 available days
+        int hpAfterFirstVisit = hero.getCurrentHp();
+        // No real time has passed since that call, but ~7 days should still be banked from before.
+        ExplorationResult second = town.returnToTown(save, 100);
+
+        assertThat(second.text()).doesNotContain("No real time has passed");
+        assertThat(hero.getCurrentHp()).isGreaterThan(hpAfterFirstVisit);
     }
 
     // --- Set-pieces --------------------------------------------------------

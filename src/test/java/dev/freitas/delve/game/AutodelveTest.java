@@ -6,6 +6,7 @@ import dev.freitas.delve.game.dungeon.DungeonGenerator;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.GameClock;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
@@ -25,7 +26,7 @@ class AutodelveTest {
         SpellService spells = new SpellService(dice);
         CombatService combat = new CombatService(dice, spells);
         ExplorationService exploration = new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService());
-        TownService town = new TownService(spells, dice);
+        TownService town = new TownService(spells, dice, new GameClock());
         return new AutodelveService(dice, exploration, combat, town);
     }
 

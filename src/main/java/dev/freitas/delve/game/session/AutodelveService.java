@@ -117,7 +117,7 @@ public class AutodelveService {
 
         // Make sure we begin in town so each episode starts from a clean, supplied state.
         if (save.getSession().getState() != SessionState.IN_TOWN) {
-            town.returnToTown(save);
+            town.simulateReturnToTown(save);
         }
 
         int episode = 0;
@@ -129,7 +129,7 @@ public class AutodelveService {
             }
             episode++;
             // Re-stock light before descending; the town rest already healed the party.
-            town.returnToTown(save);
+            town.simulateReturnToTown(save);
             if (c.getTorches() < 6) {
                 c.setTorches(6);
             }
@@ -184,7 +184,7 @@ public class AutodelveService {
 
         // Always end safely in town.
         if (c.isAlive()) {
-            town.returnToTown(save);
+            town.simulateReturnToTown(save);
         }
         return new Result(outcome, episode, startLevel, c.getLevel(), c.getXp(), log);
     }

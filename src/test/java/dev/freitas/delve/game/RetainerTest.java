@@ -54,6 +54,17 @@ class RetainerTest {
     }
 
     @Test
+    void ownerIsUnsetUntilExplicitlyAssigned() {
+        // RetainerFactory deliberately has no Character/SaveGame dependency -- ownership is set by the
+        // caller (e.g. HireCommand.hireOne), not baked into construction.
+        Retainer r = retainerFactory.create("Bryn", CharacterClass.FIGHTER, 1, 8);
+        assertThat(r.getOwner()).isNull();
+
+        r.setOwner("Anna");
+        assertThat(r.getOwner()).isEqualTo("Anna");
+    }
+
+    @Test
     void equipmentForMatchesWhatCreateActuallyEquips() {
         for (CharacterClass cls : CharacterClass.values()) {
             Retainer r = retainerFactory.create("Test", cls, 1, 9);
