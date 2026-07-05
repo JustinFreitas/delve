@@ -36,8 +36,11 @@ public final class ModuleSchema {
             Integer stairsToRoom,
             int width) {}
 
-    /** A connection to another keyed area, as read from the room's description ("door to area 7"). */
-    public record ModuleExit(String direction, int toRoomId, String door, boolean secret, ModuleTrap trap) {}
+    /** A connection to another keyed area, as read from the room's description ("door to area 7").
+        {@code doorTrap} is a trap on the door's lock/mechanism itself (sprung by forcing/picking it),
+        distinct from {@code trap} (a trap in the passage, sprung by walking through). */
+    public record ModuleExit(
+            String direction, int toRoomId, String door, boolean secret, ModuleTrap trap, ModuleTrap doorTrap) {}
 
     public record ModuleMonster(String name, int count, String disposition) {}
 

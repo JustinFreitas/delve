@@ -26,6 +26,22 @@ public class Exit {
     private String trapDescription;
     private DamageRoll trapDamage;
 
+    // A trap on the door's lock/mechanism itself -- distinct from the corridor trap above, sprung by
+    // forcing/picking the door rather than by walking through it. Only ever set on STUCK/LOCKED doors.
+    private boolean doorTrapped;
+    private boolean doorTrapDetected;
+    private boolean doorTrapSprung;
+    private String doorTrapDescription;
+    private DamageRoll doorTrapDamage;
+
+    // Whether this door's state has ever been LOCKED -- so swing-shut (see ExplorationService#move)
+    // knows to rest a formerly-locked door at UNLOCKED, not CLOSED, once it's shut again.
+    private boolean everLocked;
+
+    // Whether a spike/wedge has been jammed into this door -- true once used, from either direction;
+    // excludes it from the automatic swing-shut check and blocks using a second spike on it.
+    private boolean spiked;
+
     public Exit() {}
 
     public Exit(Direction direction, int destinationRoomId, DoorState door, boolean secret) {
@@ -132,5 +148,61 @@ public class Exit {
 
     public void setTrapDamage(DamageRoll trapDamage) {
         this.trapDamage = trapDamage;
+    }
+
+    public boolean isDoorTrapped() {
+        return doorTrapped;
+    }
+
+    public void setDoorTrapped(boolean doorTrapped) {
+        this.doorTrapped = doorTrapped;
+    }
+
+    public boolean isDoorTrapDetected() {
+        return doorTrapDetected;
+    }
+
+    public void setDoorTrapDetected(boolean doorTrapDetected) {
+        this.doorTrapDetected = doorTrapDetected;
+    }
+
+    public boolean isDoorTrapSprung() {
+        return doorTrapSprung;
+    }
+
+    public void setDoorTrapSprung(boolean doorTrapSprung) {
+        this.doorTrapSprung = doorTrapSprung;
+    }
+
+    public String getDoorTrapDescription() {
+        return doorTrapDescription;
+    }
+
+    public void setDoorTrapDescription(String doorTrapDescription) {
+        this.doorTrapDescription = doorTrapDescription;
+    }
+
+    public DamageRoll getDoorTrapDamage() {
+        return doorTrapDamage;
+    }
+
+    public void setDoorTrapDamage(DamageRoll doorTrapDamage) {
+        this.doorTrapDamage = doorTrapDamage;
+    }
+
+    public boolean isEverLocked() {
+        return everLocked;
+    }
+
+    public void setEverLocked(boolean everLocked) {
+        this.everLocked = everLocked;
+    }
+
+    public boolean isSpiked() {
+        return spiked;
+    }
+
+    public void setSpiked(boolean spiked) {
+        this.spiked = spiked;
     }
 }

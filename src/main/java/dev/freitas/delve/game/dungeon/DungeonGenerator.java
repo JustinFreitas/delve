@@ -195,6 +195,10 @@ public class DungeonGenerator {
         Room rb = rooms.get(b);
         Exit forward = new Exit(d, b, door, secret);
         Exit backward = new Exit(d.opposite(), a, door, secret);
+        if (door == DoorState.LOCKED) {
+            forward.setEverLocked(true);
+            backward.setEverLocked(true);
+        }
         // A small independent chance any non-secret corridor hides a trap (proposed default: 1-in-20).
         if (!secret && dice.d(20) == 1) {
             String description = TRAPS[dice.d(TRAPS.length) - 1];
@@ -204,6 +208,17 @@ public class DungeonGenerator {
             backward.setTrapped(true);
             backward.setTrapDescription(description);
             backward.setTrapDamage(new DamageRoll(1, 6));
+        }
+        // The guarded doors (stuck/locked) have a small independent chance the lock/mechanism itself is
+        // trapped, sprung by forcing/picking rather than by walking through (proposed default: 1-in-10).
+        if (!secret && (door == DoorState.STUCK || door == DoorState.LOCKED) && dice.d(10) == 1) {
+            String description = TRAPS[dice.d(TRAPS.length) - 1];
+            forward.setDoorTrapped(true);
+            forward.setDoorTrapDescription(description);
+            forward.setDoorTrapDamage(new DamageRoll(1, 6));
+            backward.setDoorTrapped(true);
+            backward.setDoorTrapDescription(description);
+            backward.setDoorTrapDamage(new DamageRoll(1, 6));
         }
         ra.getExits().put(d, forward);
         rb.getExits().put(d.opposite(), backward);

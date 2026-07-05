@@ -121,7 +121,8 @@ public final class ModuleLoader {
         return dungeon;
     }
 
-    private static Room mapRoom(ModuleRoom mr, List<String> warnings) {
+    /** Package-private: tests exercise this directly without a JSON fixture file. */
+    static Room mapRoom(ModuleRoom mr, List<String> warnings) {
         Room room = new Room(mr.id());
         room.setName(mr.name());
         room.setDescription(mr.description() != null ? mr.description()
@@ -139,11 +140,20 @@ public final class ModuleLoader {
                     warnings.add("Room " + mr.id() + ": unknown exit direction '" + me.direction() + "' (skipped).");
                     continue;
                 }
-                Exit exit = new Exit(dir, me.toRoomId(), parseDoor(me.door()), me.secret());
+                DoorState doorState = parseDoor(me.door());
+                Exit exit = new Exit(dir, me.toRoomId(), doorState, me.secret());
+                if (doorState == DoorState.LOCKED) {
+                    exit.setEverLocked(true);
+                }
                 if (me.trap() != null && me.trap().description() != null) {
                     exit.setTrapped(true);
                     exit.setTrapDescription(me.trap().description());
                     exit.setTrapDamage(DEFAULT_TRAP_DAMAGE);
+                }
+                if (me.doorTrap() != null && me.doorTrap().description() != null) {
+                    exit.setDoorTrapped(true);
+                    exit.setDoorTrapDescription(me.doorTrap().description());
+                    exit.setDoorTrapDamage(DEFAULT_TRAP_DAMAGE);
                 }
                 room.getExits().put(dir, exit);
             }
@@ -189,8 +199,9 @@ public final class ModuleLoader {
         return room;
     }
 
-    /** Ensures every connection is traversable both ways (modules often key an exit on one side only). */
-    private static void makeExitsBidirectional(DungeonLevel level) {
+    /** Ensures every connection is traversable both ways (modules often key an exit on one side only).
+        Package-private: tests exercise this directly without a JSON fixture file. */
+    static void makeExitsBidirectional(DungeonLevel level) {
         for (Room room : new ArrayList<>(level.getRooms().values())) {
             for (Exit exit : new ArrayList<>(room.getExits().values())) {
                 Room dest = level.room(exit.getDestinationRoomId());
@@ -200,6 +211,12 @@ public final class ModuleLoader {
                 Direction back = exit.getDirection().opposite();
                 if (!dest.getExits().containsKey(back)) {
                     Exit returnExit = new Exit(back, room.getId(), exit.getDoor(), false);
+                    returnExit.setEverLocked(exit.isEverLocked());
+                    if (exit.isDoorTrapped()) {
+                        returnExit.setDoorTrapped(true);
+                        returnExit.setDoorTrapDescription(exit.getDoorTrapDescription());
+                        returnExit.setDoorTrapDamage(exit.getDoorTrapDamage());
+                    }
                     dest.getExits().put(back, returnExit);
                 }
             }
@@ -245,15 +262,18 @@ public final class ModuleLoader {
         };
     }
 
-    private static DoorState parseDoor(String door) {
+    /** Package-private: tests exercise this directly without a JSON fixture file. */
+    static DoorState parseDoor(String door) {
         if (door == null || door.isBlank()) {
             return DoorState.NONE;
         }
         return switch (door.toLowerCase(Locale.ROOT).trim()) {
             case "open", "none", "archway", "passage" -> DoorState.NONE;
+            case "ajar" -> DoorState.AJAR;
             case "closed", "door" -> DoorState.CLOSED;
             case "stuck" -> DoorState.STUCK;
             case "locked" -> DoorState.LOCKED;
+            case "unlocked" -> DoorState.UNLOCKED;
             default -> DoorState.NONE;
         };
     }

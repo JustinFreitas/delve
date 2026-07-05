@@ -116,8 +116,10 @@ public class ExplorationService {
             return ExplorationResult.failure("There is no exit to the " + direction.lower() + ".");
         }
         if (!exit.getDoor().isPassable()) {
-            return ExplorationResult.failure("The way " + direction.lower() + " is blocked by a "
-                    + exit.getDoor().name().toLowerCase() + " door. Try `open " + direction.lower() + "`.");
+            String doorName = exit.getDoor().name().toLowerCase();
+            String article = doorName.startsWith("u") ? "an" : "a";
+            return ExplorationResult.failure("The way " + direction.lower() + " is blocked by " + article
+                    + " " + doorName + " door. Try `open " + direction.lower() + "`.");
         }
 
         ExplorationResult result = new ExplorationResult();
@@ -129,6 +131,15 @@ public class ExplorationService {
 
         session.setCurrentRoomId(exit.getDestinationRoomId());
         session.currentRoom().setVisited(true);
+
+        // A door that had to be actively opened doesn't stay open on its own -- it always swings shut
+        // once the party has passed through, unless spiked. Rests at UNLOCKED (not CLOSED) if it used
+        // to be locked, so it's never mistaken for still needing a key.
+        if (exit.getDoor() == DoorState.OPEN && !exit.isSpiked()) {
+            setBothDoors(session, exit, exit.isEverLocked() ? DoorState.UNLOCKED : DoorState.CLOSED);
+            result.add("The door swings shut behind you.");
+        }
+
         advanceTurn(save, result);
 
         maybePassiveRoomTrapSense(save, result);
@@ -200,6 +211,13 @@ public class ExplorationService {
                 found++;
                 result.add("You detect a trap in the passage to the " + exit.getDirection().lower() + ": "
                         + exit.getTrapDescription() + ".");
+            }
+            if (exit.isDoorTrapped() && !exit.isDoorTrapDetected() && !exit.isDoorTrapSprung() && dice.d(6) <= trapChance) {
+                exit.setDoorTrapDetected(true);
+                mirrorExitDoorTrapState(session, exit);
+                found++;
+                result.add("You detect a trap on the " + exit.getDirection().lower() + " door's lock: "
+                        + exit.getDoorTrapDescription() + ".");
             }
         }
 
@@ -308,15 +326,16 @@ public class ExplorationService {
         }
         DoorState door = exit.getDoor();
         switch (door) {
-            case NONE, OPEN -> {
+            case NONE, OPEN, AJAR -> {
                 return ExplorationResult.failure("The way " + direction.lower() + " is already open.");
             }
-            case CLOSED -> {
+            case CLOSED, UNLOCKED -> {
                 setBothDoors(session, exit, DoorState.OPEN);
                 return ExplorationResult.of("You open the door to the " + direction.lower() + ".");
             }
             case STUCK -> {
                 ExplorationResult result = new ExplorationResult();
+                maybeSpringDoorTrap(save, exit, result);
                 int threshold = Math.max(1, Math.min(5, 2 + character.getAbilities().modifier(Ability.STR)));
                 boolean forced = dice.d(6) <= threshold;
                 result.add("You throw your shoulder against the stuck door...");
@@ -329,11 +348,59 @@ public class ExplorationService {
                 advanceTurn(save, result); // forcing a door takes time and makes noise
                 return result;
             }
-            default -> {
-                return ExplorationResult.failure(
-                        "The door to the " + direction.lower() + " is locked. You need a key or a thief's tools.");
+            case LOCKED -> {
+                if (character.getCharacterClass() != CharacterClass.THIEF) {
+                    return ExplorationResult.failure("The door to the " + direction.lower()
+                            + " is locked. You need a key or a thief's touch.");
+                }
+                ExplorationResult result = new ExplorationResult();
+                maybeSpringDoorTrap(save, exit, result);
+                boolean picked = dice.d(100) <= ThiefSkills.openLocks(character.getLevel());
+                if (picked) {
+                    exit.setEverLocked(true);
+                    mirrorEverLocked(session, exit);
+                    setBothDoors(session, exit, DoorState.UNLOCKED);
+                    result.add("The lock clicks — it's no longer locked, but still needs a push.");
+                } else {
+                    result.add("You fumble with the lock, but it holds.");
+                }
+                advanceTurn(save, result); // picking a lock takes time, success or not
+                return result;
             }
+            default -> throw new IllegalStateException("Unhandled door state: " + door);
         }
+    }
+
+    /** Jams a spike/wedge into a door, holding it {@code open} (so it never swings shut behind the
+        party — see {@link #move}) or {@code closed} (jamming it into {@link DoorState#STUCK}, the
+        classic "spike it shut to block pursuit" tactic — works from either side, on any present door
+        regardless of its current state). Costs a turn either way. The caller (see {@code
+        command.SpikeCommand}) is responsible for confirming a spike is available and consuming it from
+        inventory only if this succeeds. */
+    public ExplorationResult spike(SaveGame save, Direction direction, boolean holdOpen) {
+        GameSession session = save.getSession();
+        Room room = session.currentRoom();
+        Exit exit = room.getExits().get(direction);
+        if (exit == null || !exit.isKnown() || exit.getDoor() == DoorState.NONE) {
+            return ExplorationResult.failure("There is no door to the " + direction.lower() + " to spike.");
+        }
+        if (exit.isSpiked()) {
+            return ExplorationResult.failure("That door already has a spike jammed in it.");
+        }
+        if (holdOpen && !exit.getDoor().isPassable()) {
+            return ExplorationResult.failure("The door to the " + direction.lower()
+                    + " isn't open yet — `open " + direction.lower() + "` it first.");
+        }
+        setBothDoors(session, exit, holdOpen ? DoorState.OPEN : DoorState.STUCK);
+        exit.setSpiked(true);
+        mirrorSpiked(session, exit);
+
+        ExplorationResult result = new ExplorationResult();
+        result.add(holdOpen
+                ? "You jam a spike under the door to the " + direction.lower() + ", wedging it open."
+                : "You jam a spike into the door to the " + direction.lower() + ", wedging it shut.");
+        advanceTurn(save, result);
+        return result;
     }
 
     /** Listens at a door for sounds beyond it: a 1-in-6 passive chance, one attempt per exit, and no
@@ -394,6 +461,40 @@ public class ExplorationService {
         }
     }
 
+    /** As {@link #mirrorExitTrapState}, but for a trap on the door's lock/mechanism itself rather than
+        the passage. */
+    private void mirrorExitDoorTrapState(GameSession session, Exit exit) {
+        Room destination = session.currentLevel().room(exit.getDestinationRoomId());
+        Exit back = destination == null ? null : destination.getExits().get(exit.getDirection().opposite());
+        if (back != null) {
+            back.setDoorTrapDetected(exit.isDoorTrapDetected());
+            back.setDoorTrapSprung(exit.isDoorTrapSprung());
+        }
+    }
+
+    /** Mirrors {@link Exit#isEverLocked()} to the other side of the doorway — set defensively the
+        moment a lock is actually picked (not just at dungeon-generation/module-authoring time), so
+        swing-shut (see {@link #move}) rests the door at {@code UNLOCKED} rather than {@code CLOSED}
+        regardless of how the door reached {@code LOCKED} in the first place. */
+    private void mirrorEverLocked(GameSession session, Exit exit) {
+        Room destination = session.currentLevel().room(exit.getDestinationRoomId());
+        Exit back = destination == null ? null : destination.getExits().get(exit.getDirection().opposite());
+        if (back != null) {
+            back.setEverLocked(exit.isEverLocked());
+        }
+    }
+
+    /** Mirrors {@link Exit#isSpiked()} to the other side of the doorway, matching {@link
+        #setBothDoors}/{@link #mirrorExitTrapState}'s convention for keeping one physical door in sync
+        across both rooms' independent {@link Exit} objects. */
+    private void mirrorSpiked(GameSession session, Exit exit) {
+        Room destination = session.currentLevel().room(exit.getDestinationRoomId());
+        Exit back = destination == null ? null : destination.getExits().get(exit.getDirection().opposite());
+        if (back != null) {
+            back.setSpiked(exit.isSpiked());
+        }
+    }
+
     /** Advances one dungeon turn: burns light, ticks the rest clock, and runs the wandering-monster
         check. */
     private void advanceTurn(SaveGame save, ExplorationResult result) {
@@ -444,6 +545,19 @@ public class ExplorationService {
             exit.setTrapSprung(true);
             mirrorExitTrapState(save.getSession(), exit);
             applyTrapDamage(save, exit.getTrapDamage(), exit.getTrapDescription(), result);
+        }
+    }
+
+    /** A trap on the door's own lock/mechanism, sprung by forcing or picking it (not by walking
+        through) — same 2-in-6-unless-detected formula as every other trap here. */
+    private void maybeSpringDoorTrap(SaveGame save, Exit exit, ExplorationResult result) {
+        if (!exit.isDoorTrapped() || exit.isDoorTrapSprung() || exit.isDoorTrapDetected()) {
+            return;
+        }
+        if (dice.d(6) <= 2) {
+            exit.setDoorTrapSprung(true);
+            mirrorExitDoorTrapState(save.getSession(), exit);
+            applyTrapDamage(save, exit.getDoorTrapDamage(), exit.getDoorTrapDescription(), result);
         }
     }
 
@@ -667,11 +781,14 @@ public class ExplorationService {
             String door = switch (exit.getDoor()) {
                 case NONE -> "open";
                 case OPEN -> "open door";
+                case AJAR -> "door ajar";
                 case CLOSED -> "closed door";
+                case UNLOCKED -> "unlocked door";
                 case STUCK -> "stuck door";
                 case LOCKED -> "locked door";
             };
-            parts.add(entry.getKey().lower() + " (" + door + ")");
+            String trapWarning = exit.isDoorTrapDetected() && !exit.isDoorTrapSprung() ? " ⚠️trapped lock" : "";
+            parts.add(entry.getKey().lower() + " (" + door + trapWarning + ")");
         }
         if (parts.isEmpty()) {
             return "There are no obvious exits.";

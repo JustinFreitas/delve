@@ -53,7 +53,8 @@ public final class GearCatalog {
             new Entry("rope", 1),
             new Entry("holy symbol", 25),
             new Entry("spellbook", 25),
-            new Entry("thieves' tools", 25));
+            new Entry("thieves' tools", 25),
+            new Entry("spike", 1));
 
     private GearCatalog() {}
 

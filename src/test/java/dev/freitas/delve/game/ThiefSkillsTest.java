@@ -19,4 +19,17 @@ class ThiefSkillsTest {
         assertThat(ThiefSkills.removeTraps(0)).isEqualTo(ThiefSkills.removeTraps(1)); // clamped to level 1
         assertThat(ThiefSkills.removeTraps(30)).isLessThanOrEqualTo(95);
     }
+
+    @Test
+    void openLocksImprovesByLevel() {
+        assertThat(ThiefSkills.openLocks(1)).isEqualTo(15);
+        assertThat(ThiefSkills.openLocks(2)).isEqualTo(20);
+        assertThat(ThiefSkills.openLocks(3)).isEqualTo(25);
+    }
+
+    @Test
+    void openLocksClampedAtTheLowAndHighEnds() {
+        assertThat(ThiefSkills.openLocks(0)).isEqualTo(ThiefSkills.openLocks(1)); // clamped to level 1
+        assertThat(ThiefSkills.openLocks(30)).isLessThanOrEqualTo(95);
+    }
 }
