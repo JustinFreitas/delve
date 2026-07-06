@@ -27,6 +27,7 @@ import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
+import dev.freitas.delve.game.session.BankService;
 import dev.freitas.delve.game.session.CombatService;
 import dev.freitas.delve.game.session.ExplorationResult;
 import dev.freitas.delve.game.session.ExplorationService;
@@ -59,6 +60,7 @@ public class GameFacade {
     private final CharacterFactory characterFactory;
     private final MuleService muleService;
     private final MuleFactory muleFactory;
+    private final BankService bankService;
     private final Dice dice;
 
     public GameFacade(
@@ -72,6 +74,7 @@ public class GameFacade {
             CharacterFactory characterFactory,
             MuleService muleService,
             MuleFactory muleFactory,
+            BankService bankService,
             Dice dice) {
         this.gameState = gameState;
         this.exploration = exploration;
@@ -83,6 +86,7 @@ public class GameFacade {
         this.characterFactory = characterFactory;
         this.muleService = muleService;
         this.muleFactory = muleFactory;
+        this.bankService = bankService;
         this.dice = dice;
     }
 
@@ -543,6 +547,51 @@ public class GameFacade {
         }
         gameState.save(userId, save);
         return ok(save, mule.getHandler() + " now leads " + mule.getName() + ".");
+    }
+
+    // --- bank ---------------------------------------------------------------
+    // Mirrors the mule load/unload pair exactly, using resolveActor(pcName) the same way.
+
+    public ActionResult bankDeposit(long userId, String pcName, int gold) {
+        return transferBank(userId, pcName, gold, true);
+    }
+
+    public ActionResult bankWithdraw(long userId, String pcName, int gold) {
+        return transferBank(userId, pcName, gold, false);
+    }
+
+    private ActionResult transferBank(long userId, String pcName, int amount, boolean depositing) {
+        SaveGame save = gameState.load(userId);
+        if (!save.hasCharacter()) {
+            return fail(save, "Roll a character first.");
+        }
+        if (save.getSession().isInDungeon()) {
+            return fail(save, "You can only reach the bank in town.");
+        }
+        Character pc = resolveActor(save, pcName);
+        if (pc == null) {
+            return fail(save, "No character named '" + pcName + "'.");
+        }
+        if (amount <= 0) {
+            return fail(save, "Amount must be a positive number of gold.");
+        }
+        if (depositing) {
+            BankService.DepositResult result = bankService.deposit(pc, amount);
+            if (result.deposited() == 0) {
+                return fail(save, pc.getName() + " has no gold on hand to deposit.");
+            }
+            gameState.save(userId, save);
+            return ok(save, pc.getName() + " deposits " + result.deposited() + " gp (a " + result.fee()
+                    + " gp fee, " + result.credited() + " gp credited) — " + pc.getBankedGold()
+                    + " gp now banked, " + pc.getGold() + " gp on hand.");
+        }
+        int moved = bankService.withdraw(pc, amount);
+        if (moved == 0) {
+            return fail(save, pc.getName() + " has no gold banked to withdraw.");
+        }
+        gameState.save(userId, save);
+        return ok(save, pc.getName() + " withdraws " + moved + " gp from the bank — " + pc.getGold()
+                + " gp on hand, " + pc.getBankedGold() + " gp still banked.");
     }
 
     // --- export & DM batch tools (stateless; do not touch the caller's save) ---

@@ -31,7 +31,7 @@ public final class CharacterSheets {
         eb.addField("XP", c.getXp() + " / " + c.xpForNextLevel(), true);
         eb.addField("Delves", String.valueOf(c.getDelveCount()), true);
 
-        eb.addField("Gold", c.getGold() + " gp", true);
+        eb.addField("Gold", c.getGold() + " gp" + (c.getBankedGold() > 0 ? " (" + c.getBankedGold() + " gp banked)" : ""), true);
         String armorLine = c.getArmor().displayName() + (c.isShield() ? " + shield" : "");
         eb.addField("Worn", armorLine, true);
         int weight = c.carriedWeightCns();
@@ -98,7 +98,11 @@ public final class CharacterSheets {
                 .append("   Move ").append(Encumbrance.movementRate(weight)).append("'/turn")
                 .append("   Carried ").append(weight).append("/").append(Encumbrance.MAX_CARRY_CNS).append(" cns\n");
         sb.append("Delves: ").append(c.getDelveCount()).append("\n");
-        sb.append("Gold: ").append(c.getGold()).append(" gp   Torches: ").append(c.getTorches());
+        sb.append("Gold: ").append(c.getGold()).append(" gp");
+        if (c.getBankedGold() > 0) {
+            sb.append(" (").append(c.getBankedGold()).append(" gp banked)");
+        }
+        sb.append("   Torches: ").append(c.getTorches());
         if (c.getLanterns() > 0 || c.getOilFlasks() > 0) {
             sb.append("   Lanterns: ").append(c.getLanterns()).append("   Oil flasks: ").append(c.getOilFlasks());
         }

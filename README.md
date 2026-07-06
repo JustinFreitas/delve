@@ -387,8 +387,27 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   never rolls one of these on its own — a randomly-placed one-way connection could seal the party away
   from the stairs/exit with no guaranteed way back, a real correctness risk the generator has no
   safeguard against today, so this stays a deliberate DM-authored placement only.
+- **Milestone 23** — economy: banking + Inn-tier resting. Two of the five items in the Economy Known Gap
+  (the other three — generosity-tier hiring, magical research, rune transferring — are deliberately
+  deferred; see below). A new `BankService` (mirrors `MuleService.load`/`unload`'s exact shape) backs
+  `/bank [pc-name]` (view), `/bank deposit`/`/bank withdraw [pc-name] <gold>` (town only): a new
+  `Character.bankedGold` field holds stored coin that, unlike ordinary `gold`, is deliberately excluded
+  from `carriedWeightCns()` — the entire point of banking it. Depositing takes gygax75-rules' 3% handling
+  fee off the top ("Money Coin Exchange / Banking Fee"); withdrawing is free. `/town` gained a second
+  optional argument, a `LodgingTier` (`dormitory`/`shared`/`room`, order-independent alongside the
+  existing day count): rates are gygax75's 1sp/5sp/10sp Dormitory/Shared Room/Room, scaled ×10 into whole
+  gp (delve has no sub-gp currency modeled anywhere else either) — `1`/`5`/`10` gp/night, charged per PC
+  per night actually rested. `Room` (the default — "Standard for PCs") has no further consequence beyond
+  its cost; `Dormitory` (cheapest) deserts every one of that PC's owned retainers unconditionally
+  ("Retainers will quit service"); `Shared Room` rolls 2d6 against each owned retainer's loyalty once per
+  *full* week actually rested (reusing the same roll-over-loyalty-deserts shape `CombatService`'s morale/
+  flee checks already use elsewhere) — a retainer who fails decides their PC is an unfit boss and leaves.
+  These are additive with (not a replacement for) `TownService`'s existing unpaid-upkeep desertion check.
+  Not modeled: gems/jewelry and general-item storage (gygax75's "Storing Treasure" also covers those, but
+  gems already auto-convert to gold at loot time and a rentable treasure-chest-as-a-container is a real,
+  separate feature not bundled in here).
 
-All milestones are complete (381 tests green).
+All milestones are complete (398 tests green).
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
   doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps
@@ -420,9 +439,11 @@ half-build it:
 - **Combat**: attacking from behind (no flanking/facing concept in `Formation`); evasion's own running-
   exhaustion and obstacle/dropped-loot/line-of-sight sub-rules (see above — folded into one flat roll
   instead of modeled individually).
-- **Economy**: Inn-tier resting costs and generosity-tier hiring, treasure storage, magical research,
-  rune transferring — the last three have nothing to act on since delve has no magic-item system beyond
-  healing potions.
+- **Economy**: generosity-tier hiring (a real wage-negotiation subsystem — daily rate/loot-share/reaction
+  table, plus a reputation stat with multi-week recovery — deliberately deferred as much larger in scope
+  than a quick add-on); magical research and rune transferring — both have nothing to act on since delve
+  has no magic-item system beyond healing potions. (Banking and Inn-tier resting costs, previously listed
+  here, shipped in Milestone 23.)
 - **Classes**: gygax75-rules' custom human classes (Barbarian, Druid, Knight, Warden) and custom
   demihuman classes (Gnome, Half-Orc, Wood Elf) — delve already implements every *standard* class from
   both lists (Fighter/Cleric/Magic-User/Thief; Dwarf/Elf/Halfling). Also open: expertise-point thief
@@ -506,7 +527,9 @@ half-built:
 | `/cast [pc-name] <spell> [target]` | Cast a prepared spell (combat or utility); name a PC first to have them cast. |
 | `/prepare [pc-name] <spell>` | Memorize a spell into a free slot — name a caster PC first in a multi-PC party. |
 | `/quaff [pc-name]` | Drink a potion of healing — your first-rolled PC by default, or name a specific PC. |
-| `/town` | Return to town: rest, heal, pay upkeep, re-prepare spells. |
+| `/town [days] [dormitory\|shared\|room]` | Return to town: rest, heal, pay upkeep, re-prepare spells, and pay for lodging (default `room`, no downside; cheaper tiers risk your retainers). |
+| `/bank [pc-name]` | View a PC's bank balance (works anywhere). |
+| `/bank deposit [pc-name] <gold>` / `/bank withdraw [pc-name] <gold>` | Move gold in/out of the bank in town — banked gold stops counting toward what you're carrying; deposits take a 3% fee, withdrawals are free. |
 | `/pregen <class> [level] [name]` | Instantly build a finished character at a level (default 5). |
 | `/export [pc-name] [embed\|text\|json]` | Export a character (embed, stat block, or JSON file); name a PC first in a multi-PC party. |
 | `/autodelve [level] [fast\|bx] [verbose\|milestones]` | Fast-forward your character via simulated delves (default B/X OSE pace, verbose log); shows the party afterward. |

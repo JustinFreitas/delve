@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.GameClock;
+import dev.freitas.delve.game.engine.LodgingTier;
 import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.engine.SpellTables;
 import dev.freitas.delve.game.model.Character;
@@ -135,7 +136,8 @@ class SpellTownTest {
         // 5-hp gap, unlike a single short stay (see restDaysPartiallyHealAShortStay below).
         assertThat(mu.getCurrentHp()).isEqualTo(mu.getMaxHp());
         assertThat(hench.getCurrentHp()).isEqualTo(hench.getMaxHp());
-        assertThat(mu.getGold()).isEqualTo(goldBefore - 10); // one retainer's upkeep
+        // One retainer's upkeep, plus a full week's lodging at the default LodgingTier.ROOM (10 gp/day).
+        assertThat(mu.getGold()).isEqualTo(goldBefore - 10 - LodgingTier.ROOM.gpPerDay() * 7);
         assertThat(mu.getMemorizedSpells()).isNotEmpty(); // spells re-prepared
     }
 

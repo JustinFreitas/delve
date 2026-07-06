@@ -45,6 +45,11 @@ public class Character implements Combatant, Advanceable {
 
     private int gold;
 
+    /** Gold safely stored at a town bank ({@code BankService}) — unlike {@link #gold}, doesn't count
+        toward {@link #carriedWeightCns()} (that's the entire point of banking it) and isn't available to
+        spend until withdrawn back into {@code gold}. */
+    private int bankedGold;
+
     /** Torches carried for lighting the way; consumed as they burn out underground. */
     private int torches = 6;
 
@@ -83,7 +88,8 @@ public class Character implements Combatant, Advanceable {
         gold, and every currently-carried {@link Container}'s own weight plus its contents. A container
         dropped mid-combat (see {@code ContainerService}, {@code CombatEncounter#getDroppedContainers})
         isn't in this list anymore, so it correctly stops counting the moment it's dropped — the input
-        to {@link Encumbrance}'s movement-rate bands. */
+        to {@link Encumbrance}'s movement-rate bands. {@link #bankedGold} deliberately does NOT count
+        here — it's stored at the bank, not on your person. */
     @JsonIgnore
     public int carriedWeightCns() {
         int weight = armor.weightCns()
@@ -255,6 +261,14 @@ public class Character implements Combatant, Advanceable {
 
     public void setGold(int gold) {
         this.gold = gold;
+    }
+
+    public int getBankedGold() {
+        return bankedGold;
+    }
+
+    public void setBankedGold(int bankedGold) {
+        this.bankedGold = bankedGold;
     }
 
     public int getTorches() {

@@ -56,6 +56,7 @@ public final class PregenExport {
         root.put("carriedWeightCns", weight);
         root.put("movementRate", Encumbrance.movementRate(weight));
         root.put("gold", c.getGold());
+        root.put("bankedGold", c.getBankedGold());
         root.put("torches", c.getTorches());
         root.put("lanterns", c.getLanterns());
         root.put("oilFlasks", c.getOilFlasks());

@@ -2,6 +2,7 @@ package dev.freitas.delve.game.session;
 
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.GameClock;
+import dev.freitas.delve.game.engine.LodgingTier;
 import dev.freitas.delve.game.engine.MuleRules;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Mule;
@@ -49,12 +50,19 @@ public class TownService {
         return returnToTown(save, DEFAULT_REST_DAYS);
     }
 
+    /** As {@link #returnToTown(SaveGame, int, LodgingTier)}, defaulting to {@link LodgingTier#ROOM} —
+        "Standard for PCs," no consequence beyond its gold cost. */
+    public ExplorationResult returnToTown(SaveGame save, int requestedDays) {
+        return returnToTown(save, requestedDays, LodgingTier.ROOM);
+    }
+
     /** A real town visit: rests at most {@code requestedDays}, further capped by however many real days
         have actually passed since {@link SaveGame#getLastTownVisitMillis()} (null — no real visit has
         ever resolved — is treated as "now," i.e. no backlog, same dynamic-fallback spirit as
         {@link SaveGame#ownerOf}). Advances that clock by the days actually rested, banking any leftover
-        real time toward a future visit rather than discarding it. */
-    public ExplorationResult returnToTown(SaveGame save, int requestedDays) {
+        real time toward a future visit rather than discarding it. {@code tier} is the whole party's
+        chosen lodging for the stay — see the per-tier consequences in {@link #rest}. */
+    public ExplorationResult returnToTown(SaveGame save, int requestedDays, LodgingTier tier) {
         long now = clock.nowMillis();
         Long lastVisit = save.getLastTownVisitMillis();
         long baseline = lastVisit != null ? lastVisit : now;
@@ -68,7 +76,7 @@ public class TownService {
                     : "Only " + days + " day" + (days == 1 ? "" : "s") + " have passed in real time "
                             + "since your last visit; the rest is cut short.";
         }
-        ExplorationResult result = rest(save, days, timeNote);
+        ExplorationResult result = rest(save, days, timeNote, tier);
         save.setLastTownVisitMillis(baseline + days * DAY_MILLIS);
         return result;
     }
@@ -78,15 +86,16 @@ public class TownService {
         the first un-healed. This always grants a full rest instead, and never touches the real-time
         clock ({@link SaveGame#getLastTownVisitMillis()}) — a later real {@link #returnToTown} is judged
         purely against the player's own last real visit, unaffected by any simulated runs in between.
+        Always {@link LodgingTier#ROOM} — a simulated multi-delve grind has no lodging choice to make.
         Package-private, not public: this is an internal escape hatch for {@code game.session}'s own
         simulation code, not a general-purpose alternative to the real, time-gated {@link #returnToTown}
         — the command/API layers live in other packages and so cannot reach it, which is deliberate:
         it structurally rules out a future command or web endpoint calling the wrong one by mistake. */
     ExplorationResult simulateReturnToTown(SaveGame save) {
-        return rest(save, DEFAULT_REST_DAYS, null);
+        return rest(save, DEFAULT_REST_DAYS, null, LodgingTier.ROOM);
     }
 
-    private ExplorationResult rest(SaveGame save, int days, String timeNote) {
+    private ExplorationResult rest(SaveGame save, int days, String timeNote, LodgingTier tier) {
         Character c = save.getCharacter();
         ExplorationResult result = new ExplorationResult();
 
@@ -172,6 +181,44 @@ public class TownService {
             }
         }
         save.getRetainers().removeAll(quitters);
+
+        // Inn-tier lodging — each PC pays for their own stay, scaled by days actually rested (unlike
+        // the flat-per-visit upkeep above, lodging really is a per-night cost). The cheaper tiers carry
+        // a real, tier-specific consequence for the PC's *own* retainers, beyond the gold: gygax75-rules
+        // frames this as "where is the Boss staying," not a per-retainer choice.
+        List<Retainer> lodgingDeserters = new ArrayList<>();
+        if (days > 0) {
+            for (Character pc : save.getCharacters()) {
+                int lodgingCost = tier.gpPerDay() * days;
+                int paidLodging = Math.min(lodgingCost, pc.getGold());
+                pc.setGold(pc.getGold() - paidLodging);
+                result.add((solo ? "You pay " : pc.getName() + " pays ") + paidLodging + " gp for a "
+                        + tier.displayName().toLowerCase() + (days == 1 ? "" : " (" + days + " nights)") + ".");
+
+                List<Retainer> owned = save.retainersOwnedBy(pc);
+                if (owned.isEmpty()) {
+                    continue;
+                }
+                if (tier == LodgingTier.DORMITORY) {
+                    lodgingDeserters.addAll(owned);
+                    result.add((solo ? "Your" : pc.getName() + "'s") + " retainer" + (owned.size() == 1 ? "" : "s")
+                            + " won't wait in a flophouse while " + (solo ? "you're" : pc.getName() + " is")
+                            + " away — " + (owned.size() == 1 ? "they quit" : "they all quit") + ".");
+                } else if (tier == LodgingTier.SHARED_ROOM) {
+                    int weeks = days / 7;
+                    for (int week = 0; week < weeks; week++) {
+                        for (Retainer r : owned) {
+                            if (!lodgingDeserters.contains(r) && dice.roll2d6() > r.getLoyalty()) {
+                                lodgingDeserters.add(r);
+                                result.add(r.getName() + " decides " + (solo ? "you're" : pc.getName() + " is")
+                                        + " no fit boss to share a room with, and leaves for good.");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        save.getRetainers().removeAll(lodgingDeserters);
 
         // Mule stabling/fodder, same flat-per-visit idiom as retainer upkeep above — paid by its owner.
         // A mule has no loyalty to lose, so an unpaid stay just runs up a reported shortfall rather than

@@ -26,7 +26,8 @@ public record StateSnapshot(
         MuleSummary mule) {
 
     public record CharacterSummary(
-            String name, String characterClass, int level, int currentHp, int maxHp, boolean alive, boolean primary) {}
+            String name, String characterClass, int level, int currentHp, int maxHp, boolean alive,
+            boolean primary, int gold, int bankedGold) {}
 
     public record RetainerSummary(
             String name, String characterClass, int level, int currentHp, int maxHp, String owner) {}
@@ -45,7 +46,7 @@ public record StateSnapshot(
 
         List<CharacterSummary> characters = save.getCharacters().stream()
                 .map(pc -> new CharacterSummary(pc.getName(), pc.getCharacterClass().displayName(), pc.getLevel(),
-                        pc.getCurrentHp(), pc.getMaxHp(), pc.isAlive(), pc == c))
+                        pc.getCurrentHp(), pc.getMaxHp(), pc.isAlive(), pc == c, pc.getGold(), pc.getBankedGold()))
                 .toList();
         List<RetainerSummary> retainers = save.getRetainers().stream()
                 .map(r -> new RetainerSummary(r.getName(), r.getCharacterClass().displayName(), r.getLevel(),

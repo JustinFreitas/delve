@@ -7,6 +7,7 @@ import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.GameClock;
+import dev.freitas.delve.game.engine.LodgingTier;
 import dev.freitas.delve.game.engine.MuleRules;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.ContentType;
@@ -228,7 +229,10 @@ class MuleTest {
 
         ExplorationResult result = town.returnToTown(save);
 
-        assertThat(pc.getGold()).isEqualTo(100 - MuleRules.UPKEEP_GP_PER_WEEK);
+        // Defaults to a full week's rest at the default LodgingTier.ROOM (10 gp/day), on top of the
+        // mule's own upkeep.
+        int lodging = LodgingTier.ROOM.gpPerDay() * 7;
+        assertThat(pc.getGold()).isEqualTo(100 - MuleRules.UPKEEP_GP_PER_WEEK - lodging);
         assertThat(result.text()).contains("stabling Mule");
     }
 

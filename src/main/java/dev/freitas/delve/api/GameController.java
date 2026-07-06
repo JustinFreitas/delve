@@ -145,6 +145,16 @@ public class GameController {
         return game.muleHandler(userId(principal), req.name());
     }
 
+    @PostMapping("/delve/bank/deposit")
+    public ActionResult bankDeposit(@AuthenticationPrincipal OAuth2User principal, @RequestBody BankGoldRequest req) {
+        return game.bankDeposit(userId(principal), req.pc(), req.gold());
+    }
+
+    @PostMapping("/delve/bank/withdraw")
+    public ActionResult bankWithdraw(@AuthenticationPrincipal OAuth2User principal, @RequestBody BankGoldRequest req) {
+        return game.bankWithdraw(userId(principal), req.pc(), req.gold());
+    }
+
     // Request bodies. `pc` (where present) names a specific PC in a multi-PC party; null/blank
     // defaults to the primary (first-rolled) PC, same as the equivalent Discord command's [pc-name].
     public record RollRequest(String cls, String name) {}
@@ -172,4 +182,6 @@ public class GameController {
     public record MuleGoldRequest(String pc, int gold) {}
 
     public record MuleHandlerRequest(String name) {}
+
+    public record BankGoldRequest(String pc, int gold) {}
 }

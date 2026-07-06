@@ -16,6 +16,7 @@ import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
+import dev.freitas.delve.game.session.BankService;
 import dev.freitas.delve.game.session.CombatService;
 import dev.freitas.delve.game.session.ExplorationService;
 import dev.freitas.delve.game.session.LightingService;
@@ -71,6 +72,7 @@ class GameFacadeTest {
             new CharacterFactory(dice),
             new MuleService(),
             new MuleFactory(dice),
+            new BankService(),
             dice);
 
     private static final long USER = 42L;
