@@ -15,6 +15,7 @@ import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
 import dev.freitas.delve.game.session.LightingService;
+import dev.freitas.delve.game.session.MuleService;
 import dev.freitas.delve.game.session.ExplorationService;
 import dev.freitas.delve.game.session.SpellService;
 import java.util.Random;
@@ -75,7 +76,7 @@ class TreasureTrapTest {
     }
 
     private ExplorationService newService(Dice dice) {
-        return new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        return new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
     }
 
     private SaveGame trapSave(Character character) {

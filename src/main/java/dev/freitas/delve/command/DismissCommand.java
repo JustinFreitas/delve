@@ -4,15 +4,17 @@ import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.session.ExplorationResult;
 import dev.freitas.delve.game.session.LightingService;
 import org.springframework.stereotype.Component;
 
-/** Releases a retainer from service: {@code /dismiss [pc-name] <name>}. An optional leading PC-name
-    says who's doing the dismissing, in a multi-PC party — same idiom as {@code /hire}. A PC may only
-    dismiss their own retainers (see {@link #canDismiss}). */
+/** Releases a retainer — or the party's mule — from service: {@code /dismiss [pc-name] <name>}. An
+    optional leading PC-name says who's doing the dismissing, in a multi-PC party — same idiom as
+    {@code /hire}. A PC may only dismiss their own retainers (see {@link #canDismiss}); the mule is
+    shared party baggage, so anyone may release it. */
 @Component
 public class DismissCommand extends Command {
 
@@ -27,13 +29,21 @@ public class DismissCommand extends Command {
     public void invoke(CommandContext ctx) {
         long userId = ctx.getInvokerUserId();
         SaveGame save = ctx.getBeans().gameState.load(userId);
-        if (!save.hasCharacter() || save.getRetainers().isEmpty()) {
-            ctx.reply("You have no retainers to dismiss.");
+        if (!save.hasCharacter() || (save.getRetainers().isEmpty() && save.getMules().isEmpty())) {
+            ctx.reply("You have no retainers or mules to dismiss.");
             return;
         }
         String argsText = ctx.getArgumentText().trim();
         if (argsText.isBlank()) {
             ctx.reply("Dismiss whom? `dismiss [pc-name] <name>`. Use `" + ctx.getPrefix() + "party` to see names.");
+            return;
+        }
+
+        Mule muleMatch = save.findMule(argsText);
+        if (muleMatch != null) {
+            save.getMules().remove(muleMatch);
+            ctx.getBeans().gameState.save(userId, save);
+            ctx.reply("You release **" + muleMatch.getName() + "** — it wanders off.");
             return;
         }
 
@@ -49,7 +59,7 @@ public class DismissCommand extends Command {
                 .findFirst()
                 .orElse(null);
         if (match == null) {
-            ctx.reply("No retainer named **" + name + "** is in your party.");
+            ctx.reply("No retainer or mule named **" + name + "** is in your party.");
             return;
         }
         if (!canDismiss(save, actor, match)) {
@@ -92,7 +102,8 @@ public class DismissCommand extends Command {
     @Override
     public void provideHelp(HelpContext help) {
         help.addUsage("[pc-name] <name>");
-        help.addDescription("Dismisses a retainer from your party. In a multi-PC party, you may only "
-                + "dismiss your own retainers — name the owning PC first if it isn't your first-rolled PC.");
+        help.addDescription("Dismisses a retainer, or releases your mule by name, from your party. In a "
+                + "multi-PC party, you may only dismiss your own retainers — name the owning PC first if "
+                + "it isn't your first-rolled PC. Anyone may release the party's mule.");
     }
 }

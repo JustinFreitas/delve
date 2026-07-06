@@ -52,12 +52,15 @@ public class ExplorationService {
     private final DungeonGenerator generator;
     private final CombatService combat;
     private final LightingService lighting;
+    private final MuleService mules;
 
-    public ExplorationService(Dice dice, DungeonGenerator generator, CombatService combat, LightingService lighting) {
+    public ExplorationService(
+            Dice dice, DungeonGenerator generator, CombatService combat, LightingService lighting, MuleService mules) {
         this.dice = dice;
         this.generator = generator;
         this.combat = combat;
         this.lighting = lighting;
+        this.mules = mules;
     }
 
     /** Begins a fresh procedurally-generated dungeon run for the character, lighting the first torch. */
@@ -504,6 +507,7 @@ public class ExplorationService {
 
         lighting.reconcileBearer(save, result);
         lighting.tickFuel(save, result);
+        mules.reconcileHandler(save, result);
 
         // Wandering monster check every other turn (1-in-6, plus an extra roll per additional
         // 8 party members beyond 9).
@@ -582,10 +586,11 @@ public class ExplorationService {
         }
     }
 
-    /** Total party size for the wandering-monster check: every living PC plus every living retainer.
-        Package-private: tests exercise this directly. */
+    /** Total party size for the wandering-monster check: every living PC, every living retainer, and
+        the party's mule if it has one (physically present and just as noisy). Package-private: tests
+        exercise this directly. */
     int partySize(SaveGame save) {
-        return save.livingCharacters().size() + save.livingRetainers().size();
+        return save.livingCharacters().size() + save.livingRetainers().size() + save.livingMules().size();
     }
 
     /** Base 1-in-6 wandering-monster check, plus an extra 1-in-6 roll for every additional set of 8

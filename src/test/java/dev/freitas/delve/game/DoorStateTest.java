@@ -22,6 +22,7 @@ import dev.freitas.delve.game.session.CombatService;
 import dev.freitas.delve.game.session.ExplorationResult;
 import dev.freitas.delve.game.session.ExplorationService;
 import dev.freitas.delve.game.session.LightingService;
+import dev.freitas.delve.game.session.MuleService;
 import dev.freitas.delve.game.session.SpellService;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
@@ -262,7 +263,7 @@ class DoorStateTest {
 
     private ExplorationService newService(Dice dice) {
         return new ExplorationService(
-                dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+                dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
     }
 
     private SaveGame twoRoomSave(Dice dice, CharacterClass cls, int torches, DoorState doorState) {

@@ -11,6 +11,7 @@ import dev.freitas.delve.game.engine.Encumbrance;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Leveling;
+import dev.freitas.delve.game.engine.MuleRules;
 import dev.freitas.delve.game.engine.RangeBand;
 import dev.freitas.delve.game.engine.ReactionTier;
 import dev.freitas.delve.game.engine.SavingThrows;
@@ -25,6 +26,7 @@ import dev.freitas.delve.game.model.Exit;
 import dev.freitas.delve.game.model.GameSession;
 import dev.freitas.delve.game.model.Monster;
 import dev.freitas.delve.game.model.MonsterType;
+import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
@@ -556,7 +558,9 @@ public class CombatService {
             int targetAc = target.armorClass() + polingSurpriseAcPenalty(save, encounter, width, target);
             var outcome = AttackResolver.resolve(dice.d20(), 0, type.thac0(), targetAc);
             String victim = (target instanceof Character && solo) ? "you" : target.getName();
-            if (outcome.hit() && type.effect() == AttackEffect.DRAIN) {
+            // Drain only has a level to take from an Advanceable combatant (PC/retainer) — a mule has no
+            // levels, so it takes ordinary damage from the same hit instead of falling through untouched.
+            if (outcome.hit() && type.effect() == AttackEffect.DRAIN && target instanceof Advanceable) {
                 applyDrain(save, target, result);
                 if (target instanceof Character && save.livingCharacters().isEmpty()) {
                     return;
@@ -566,12 +570,53 @@ public class CombatService {
                 target.setCurrentHp(target.getCurrentHp() - damage);
                 result.add("The " + type.name().toLowerCase() + " hits " + victim + " for " + damage + " damage"
                         + (target.isAlive() ? "." : (target instanceof Character ? "." : " — " + target.getName() + " falls!")));
+                if (target instanceof Mule mule && !mule.isAlive()) {
+                    save.getMules().remove(mule);
+                    recoverMuleCargo(save, mule, result);
+                }
                 if (target instanceof Character && save.livingCharacters().isEmpty()) {
                     return;
                 }
             } else {
                 result.add("The " + type.name().toLowerCase() + " misses " + victim + ".");
             }
+        }
+    }
+
+    /** A fallen mule's cargo spills where it drops — every living PC in turn scoops up as much as their
+        own remaining carry capacity allows ({@link Encumbrance#capacityRemaining}, gygax75-rules' hard
+        2400gp load limit), so a party already loaded down may not recover all of it (or any of it).
+        Whatever nobody has room for is left behind with the corpse. Each PC is credited XP for their own
+        recovered share, same 1-XP-per-gp rate as ordinary dungeon treasure; retainers hold no gold of
+        their own (see {@code Retainer}) so don't share in this one, unlike a full room haul.
+        Package-private: tests exercise this directly without needing to engineer a mule's death. */
+    void recoverMuleCargo(SaveGame save, Mule mule, ExplorationResult result) {
+        int remaining = mule.getCarriedGold();
+        if (remaining == 0) {
+            return;
+        }
+        boolean solo = save.getCharacters().size() == 1;
+        int recovered = 0;
+        for (Character pc : save.livingCharacters()) {
+            if (remaining == 0) {
+                break;
+            }
+            int share = Math.min(remaining, Encumbrance.capacityRemaining(pc.getGold()));
+            if (share == 0) {
+                continue;
+            }
+            pc.setGold(pc.getGold() + share);
+            remaining -= share;
+            recovered += share;
+            result.getLines().addAll(Leveling.awardXp(pc, share, dice, false));
+        }
+        if (recovered > 0) {
+            result.add((solo ? "You recover" : "The party recovers") + " **" + recovered + " gp** from "
+                    + mule.getName() + "'s cargo" + (remaining > 0 ? "" : ".")
+                    + (remaining > 0 ? " — **" + remaining + " gp** is left behind, nobody has room for it." : ""));
+        } else {
+            result.add(mule.getName() + " goes down carrying " + remaining
+                    + " gp — nobody has room to recover it.");
         }
     }
 
@@ -809,7 +854,9 @@ public class CombatService {
     }
 
     /** The party's group movement rate is the slowest living member's — the classic B/X "the party
-        moves at the pace of its slowest member" rule, across every living PC and retainer. */
+        moves at the pace of its slowest member" rule, across every living PC and retainer, plus the
+        party's mule if it has one (an overloaded mule can drag the party down the same way an overloaded
+        PC can). */
     private int groupEncounterRate(SaveGame save) {
         int slowest = Integer.MAX_VALUE;
         for (Character c : save.livingCharacters()) {
@@ -818,6 +865,9 @@ public class CombatService {
         for (Retainer r : save.livingRetainers()) {
             // Retainers don't track personal gold/heavy-load (see RetainerFactory) — never treated as heavy.
             slowest = Math.min(slowest, Encumbrance.encounterRate(r.getArmor(), false));
+        }
+        for (Mule mule : save.livingMules()) {
+            slowest = Math.min(slowest, MuleRules.encounterRate(mule.getCarriedGold()));
         }
         return slowest == Integer.MAX_VALUE ? 0 : slowest;
     }

@@ -3,9 +3,11 @@ package dev.freitas.delve.command;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Hands;
+import dev.freitas.delve.game.engine.MuleRules;
 import dev.freitas.delve.game.engine.RetainerRules;
 import dev.freitas.delve.game.engine.WeaponCatalog;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
 import java.util.List;
@@ -59,7 +61,22 @@ public final class PartySummary {
         sb.append("```");
         sb.append("Retainers: ").append(save.getRetainers().size()).append("/").append(max)
                 .append(" (Charisma cap).");
+        Mule mule = save.getMule();
+        if (mule != null) {
+            sb.append("\n").append(muleLine(mule, fullOrder, width));
+        }
         return sb.toString();
+    }
+
+    private static String muleLine(Mule mule, List<Combatant> fullOrder, int width) {
+        int rank = Formation.nominalRank(fullOrder, width, mule);
+        String rankPart = rank < 0 ? "" : "rank " + rank
+                + (Formation.isEngaged(fullOrder, width, mule) ? " (engaged)" : "") + "  ";
+        String handler = mule.getHandler() == null ? "no handler" : "handler " + mule.getHandler();
+        return "Mule: **" + mule.getName() + "** (" + handler + ") — " + rankPart + "AC " + mule.armorClass()
+                + "  " + mule.getCurrentHp() + "/" + mule.getMaxHp() + " hp — " + mule.getCarriedGold() + "/"
+                + MuleRules.CAPACITY_MAX_CNS + " gp, " + MuleRules.descriptor(mule.getCarriedGold())
+                + " (" + MuleRules.movementRate(mule.getCarriedGold()) + "'/turn).";
     }
 
     /** Nominal rank, engagement status, weapon-class glyph, and hand status for one party member. */

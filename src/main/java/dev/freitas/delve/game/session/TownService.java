@@ -2,7 +2,9 @@ package dev.freitas.delve.game.session;
 
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.GameClock;
+import dev.freitas.delve.game.engine.MuleRules;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
@@ -170,6 +172,20 @@ public class TownService {
             }
         }
         save.getRetainers().removeAll(quitters);
+
+        // Mule stabling/fodder, same flat-per-visit idiom as retainer upkeep above — paid by its owner.
+        // A mule has no loyalty to lose, so an unpaid stay just runs up a reported shortfall rather than
+        // any desertion equivalent.
+        if (days > 0) {
+            for (Mule mule : save.getMules()) {
+                Character owner = save.ownerOf(mule);
+                int paid = Math.min(MuleRules.UPKEEP_GP_PER_WEEK, owner.getGold());
+                owner.setGold(owner.getGold() - paid);
+                String payerLabel = solo ? "You pay " : owner.getName() + " pays ";
+                result.add(payerLabel + paid + " gp stabling " + mule.getName()
+                        + (paid < MuleRules.UPKEEP_GP_PER_WEEK ? " — short of the full fee." : "."));
+            }
+        }
 
         // Re-prepare the player's spells for the next delve. (Retainer spellcasting is summarized in
         // combat rather than tracked per slot, so they need no preparation step.)

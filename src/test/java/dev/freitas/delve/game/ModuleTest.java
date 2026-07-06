@@ -19,6 +19,7 @@ import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
 import dev.freitas.delve.game.session.LightingService;
+import dev.freitas.delve.game.session.MuleService;
 import dev.freitas.delve.game.session.ExplorationService;
 import dev.freitas.delve.game.session.SpellService;
 import java.util.ArrayDeque;
@@ -91,7 +92,7 @@ class ModuleTest {
         Dice dice = new Dice(new Random(7));
         SpellService spells = new SpellService(dice);
         CombatService combat = new CombatService(dice, spells);
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService(), new MuleService());
 
         SaveGame save = new SaveGame();
         Character hero = new CharacterFactory(dice)

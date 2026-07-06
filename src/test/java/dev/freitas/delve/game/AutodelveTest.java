@@ -14,6 +14,7 @@ import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.AutodelveService;
 import dev.freitas.delve.game.session.CombatService;
 import dev.freitas.delve.game.session.LightingService;
+import dev.freitas.delve.game.session.MuleService;
 import dev.freitas.delve.game.session.ExplorationService;
 import dev.freitas.delve.game.session.SpellService;
 import dev.freitas.delve.game.session.TownService;
@@ -25,7 +26,7 @@ class AutodelveTest {
     private AutodelveService newService(Dice dice) {
         SpellService spells = new SpellService(dice);
         CombatService combat = new CombatService(dice, spells);
-        ExplorationService exploration = new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService());
+        ExplorationService exploration = new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService(), new MuleService());
         TownService town = new TownService(spells, dice, new GameClock());
         return new AutodelveService(dice, exploration, combat, town);
     }

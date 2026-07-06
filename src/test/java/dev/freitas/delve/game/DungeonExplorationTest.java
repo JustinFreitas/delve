@@ -22,6 +22,7 @@ import dev.freitas.delve.game.model.SessionState;
 import dev.freitas.delve.game.session.CombatService;
 import dev.freitas.delve.game.session.SpellService;
 import dev.freitas.delve.game.session.LightingService;
+import dev.freitas.delve.game.session.MuleService;
 import dev.freitas.delve.game.session.ExplorationService;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -110,7 +111,7 @@ class DungeonExplorationTest {
     @Test
     void enterStartsTheDelveAndLightsATorch() {
         Dice dice = new Dice(new Random(3));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = newSaveWithCharacter(6);
 
         var result = service.enter(save);
@@ -125,7 +126,7 @@ class DungeonExplorationTest {
     @Test
     void movingAdvancesDungeonTurnsAndBurnsLight() {
         Dice dice = new Dice(new Random(11));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = twoRoomSave(dice, 0); // no spare torches; current torch has 6 turns
 
         // Alternate east/west between the two rooms. Starting in room 0, even steps go east, odd west,
@@ -151,7 +152,7 @@ class DungeonExplorationTest {
     @Test
     void searchGathersTreasureAndCanRevealSecretDoors() {
         Dice dice = new Dice(new Random(5));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = twoRoomSave(dice, 3);
         Room room = save.getSession().currentRoom();
         room.setHasTreasure(true);
@@ -175,7 +176,7 @@ class DungeonExplorationTest {
     @Test
     void treasureSplitsAcrossLivingRetainersAndReducesThePcsShare() {
         Dice dice = new Dice(new Random(6));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = twoRoomSave(dice, 3);
         save.getRetainers().add(new RetainerFactory(dice).create("Bryn", CharacterClass.FIGHTER, 1, 9));
         Room room = save.getSession().currentRoom();
@@ -197,7 +198,7 @@ class DungeonExplorationTest {
     @Test
     void delveCountIncrementsEachTimeADelveBegins() {
         Dice dice = new Dice(new Random(10));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = newSaveWithCharacter(6);
         assertThat(save.getCharacter().getDelveCount()).isZero();
 
@@ -237,7 +238,7 @@ class DungeonExplorationTest {
     @Test
     void trapsSpringSometimesAndCanBeAvoidedWhenDetected() {
         Dice dice = new Dice(new Random(8));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
 
         int sprang = 0;
         for (int trial = 0; trial < 200; trial++) {
@@ -277,7 +278,7 @@ class DungeonExplorationTest {
     @Test
     void listeningIsOneAttemptPerDoorAndCostsNoTurn() {
         Dice dice = new Dice(new Random(21));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = twoRoomSave(dice, 3);
         Exit exit = save.getSession().currentRoom().getExits().get(Direction.EAST);
         assertThat(exit.isListened()).isFalse();
@@ -293,7 +294,7 @@ class DungeonExplorationTest {
     @Test
     void listeningSometimesDetectsAMonsterBeyondADoor() {
         Dice dice = new Dice(new Random(22));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         int heard = 0;
         for (int trial = 0; trial < 200; trial++) {
             SaveGame save = twoRoomSave(dice, 3);
@@ -313,7 +314,7 @@ class DungeonExplorationTest {
     @Test
     void restingResetsTheFatigueClock() {
         Dice dice = new Dice(new Random(23));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = twoRoomSave(dice, 9);
 
         for (int i = 0; i < 6; i++) {
@@ -346,7 +347,7 @@ class DungeonExplorationTest {
     /** Shuttles between the two test rooms, counting how many moves trigger a wandering monster. */
     private int countWanderingTriggers(long seed, int extraRetainers) {
         Dice dice = new Dice(new Random(seed));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = twoRoomSave(dice, 999); // plenty of spare torches so light never runs out
         for (int i = 1; i <= extraRetainers; i++) {
             save.getRetainers().add(new RetainerFactory(dice).create("R" + i, CharacterClass.FIGHTER, 1, 9));
@@ -369,7 +370,7 @@ class DungeonExplorationTest {
     @Test
     void scriptedHostileDispositionStartsCombat() {
         Dice dice = new Dice(new Random(41));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = twoRoomSave(dice, 9);
         Room target = save.getSession().currentLevel().room(1);
         target.setContent(ContentType.MONSTER);
@@ -384,7 +385,7 @@ class DungeonExplorationTest {
     @Test
     void scriptedFriendlyDispositionOverridesEvenTheUndeadAlwaysHostileRule() {
         Dice dice = new Dice(new Random(42));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         for (int trial = 0; trial < 30; trial++) {
             SaveGame save = twoRoomSave(dice, 9);
             Room target = save.getSession().currentLevel().room(1);
@@ -401,7 +402,7 @@ class DungeonExplorationTest {
     @Test
     void unscriptedRoomStillRollsReactionAsBefore() {
         Dice dice = new Dice(new Random(43));
-        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
         SaveGame save = twoRoomSave(dice, 9);
         Room target = save.getSession().currentLevel().room(1);
         target.setContent(ContentType.MONSTER);

@@ -9,10 +9,24 @@ public final class Encumbrance {
 
     private static final int HEAVY_LOAD_GOLD = 800; // a sack of coin heavy enough to slow you down
 
+    /** A hard carrying-capacity cap, from gygax75-rules' full coin-weight system ("Maximum load: 2400
+        cns... cannot move" — 1 coin = 1 cn there, same unit {@link dev.freitas.delve.game.model.Mule}'s
+        own capacity already uses). Scoped narrowly to gold specifically for now (recovering a fallen
+        mule's cargo, see {@code CombatService}) rather than a full item-weight rewrite of this class —
+        {@link #heavyLoad} above stays the only thing that gates ordinary movement/treasure pickup. */
+    public static final int MAX_CARRY_GOLD = 2400;
+
     private Encumbrance() {}
 
     public static boolean heavyLoad(int gold) {
         return gold >= HEAVY_LOAD_GOLD;
+    }
+
+    /** How much more gold this PC could still carry before hitting the hard cap — may already be zero
+        if they're carrying more than that (e.g. a pregen'd character's starting wealth), in which case
+        they simply can't pick up any more right now. */
+    public static int capacityRemaining(int gold) {
+        return Math.max(0, MAX_CARRY_GOLD - gold);
     }
 
     /** Exploration movement rate in feet per turn. */

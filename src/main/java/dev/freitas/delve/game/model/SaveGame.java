@@ -17,6 +17,11 @@ public class SaveGame {
     /** Max PCs a single save may hold. */
     public static final int MAX_CHARACTERS = 8;
 
+    /** Max mules a party may own — gygax75-rules: "a single mule may be brought into a dungeon by a
+        party." No "spare mules waiting in town" concept exists elsewhere in delve (the whole party
+        always delves together), so this stays a hard cap of one rather than modeling that. */
+    public static final int MAX_MULES = 1;
+
     /** Reserved {@link #marchingOrder} token for a solo PC's own slot (kept alive as a "me" synonym —
         see {@link #resolve}); with 2+ PCs, tokens are real PC names instead, same as retainers. */
     public static final String PLAYER_SLOT = "@you";
@@ -24,6 +29,8 @@ public class SaveGame {
     private java.util.List<Character> characters = new java.util.ArrayList<>();
     private GameSession session = new GameSession();
     private java.util.List<Retainer> retainers = new java.util.ArrayList<>();
+
+    private java.util.List<Mule> mules = new java.util.ArrayList<>();
 
     /** Marching-order sequence of {@link #PLAYER_SLOT}/PC-name/retainer-name tokens; may reference dead
         members so column indices in {@link dev.freitas.delve.game.engine.Formation} stay stable as
@@ -124,6 +131,52 @@ public class SaveGame {
         return alive;
     }
 
+    public java.util.List<Mule> getMules() {
+        return mules;
+    }
+
+    /** Mules still able to accompany the party (alive) — in practice always all of {@link #getMules()},
+        since a mule that dies in combat is removed on the spot ({@code CombatService}), but kept
+        consistent with {@link #livingCharacters()}/{@link #livingRetainers()} for callers (party-size,
+        group movement rate) that shouldn't have to know that. */
+    public java.util.List<Mule> livingMules() {
+        java.util.List<Mule> alive = new java.util.ArrayList<>();
+        for (Mule m : mules) {
+            if (m.isAlive()) {
+                alive.add(m);
+            }
+        }
+        return alive;
+    }
+
+    public void setMules(java.util.List<Mule> mules) {
+        this.mules = mules;
+    }
+
+    /** Resolves a mule by name (case-insensitive), or {@code null} if the party has none matching. Mules
+        are also {@link dev.freitas.delve.game.engine.Combatant}s and resolvable via {@link #resolve} for
+        marching-order/combat purposes; this typed lookup is for mule-specific commands ({@code /mule},
+        {@code /dismiss}) that want a {@link Mule} directly instead of a generic {@code Combatant}. */
+    @JsonIgnore
+    public Mule findMule(String name) {
+        if (name == null) {
+            return null;
+        }
+        for (Mule m : mules) {
+            if (name.equalsIgnoreCase(m.getName())) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    /** The party's one mule, or {@code null} if it hasn't bought one — a convenience for call sites
+        that don't need to name it (there's only ever {@link #MAX_MULES}). */
+    @JsonIgnore
+    public Mule getMule() {
+        return mules.isEmpty() ? null : mules.get(0);
+    }
+
     public java.util.List<String> getMarchingOrder() {
         return marchingOrder;
     }
@@ -141,15 +194,15 @@ public class SaveGame {
     }
 
     /**
-     * The whole party (every PC + every retainer, alive or dead) in marching-order sequence — the list
-     * {@link dev.freitas.delve.game.engine.Formation} groups into ranks/columns. Dead members are kept in
-     * place so column indices don't shift when someone falls; any current roster member not yet listed in
-     * {@link #marchingOrder} is appended at the back, ordered by toughness via
+     * The whole party (every PC + every retainer + the mule, alive or dead) in marching-order sequence —
+     * the list {@link dev.freitas.delve.game.engine.Formation} groups into ranks/columns. Dead members
+     * are kept in place so column indices don't shift when someone falls; any current roster member not
+     * yet listed in {@link #marchingOrder} is appended at the back, ordered by toughness via
      * {@link Toughness#BY_TOUGHNESS} (better-armored, higher-HP combatants first) — so a heavily armored
      * Fighter or Dwarf, whether a PC or a retainer, defaults toward the front of that auto-appended tail,
-     * while a Magic-User or Thief defaults toward the back, unless explicitly placed elsewhere via
-     * {@code /order}. A newly hired retainer or newly rolled PC simply joins this sortable pool without
-     * any changes needed at the hire/roll site.
+     * while a Magic-User, Thief, or the mule (AC 7, 9hp) defaults toward the back, unless explicitly
+     * placed elsewhere via {@code /order}. A newly hired retainer, newly rolled PC, or newly bought mule
+     * simply joins this sortable pool without any changes needed at the hire/roll/buy site.
      */
     @JsonIgnore
     public java.util.List<Combatant> fullOrder() {
@@ -165,6 +218,11 @@ public class SaveGame {
         for (Retainer r : retainers) {
             if (placed.add(keyFor(r))) {
                 unplaced.add(r);
+            }
+        }
+        for (Mule m : mules) {
+            if (placed.add(keyFor(m))) {
+                unplaced.add(m);
             }
         }
         for (Character c : characters) {
@@ -191,8 +249,8 @@ public class SaveGame {
 
     /** Resolves a marching-order/light-bearer/command-argument token to a party combatant: {@code "me"}
         or {@link #PLAYER_SLOT} only when exactly one PC exists (ambiguous otherwise — callers must name
-        a PC once there are 2+), else a PC name, else a retainer name. The single shared replacement for
-        what used to be three independent copies of this lookup. */
+        a PC once there are 2+), else a PC name, else a retainer name, else the mule's name. The single
+        shared replacement for what used to be three independent copies of this lookup. */
     @JsonIgnore
     public Combatant resolve(String token) {
         if (token == null) {
@@ -209,6 +267,11 @@ public class SaveGame {
         for (Retainer r : retainers) {
             if (r.getName().equalsIgnoreCase(token)) {
                 return r;
+            }
+        }
+        for (Mule m : mules) {
+            if (m.getName().equalsIgnoreCase(token)) {
+                return m;
             }
         }
         return null;
@@ -232,6 +295,20 @@ public class SaveGame {
     @JsonIgnore
     public Character ownerOf(Retainer r) {
         String name = r.getOwner();
+        if (name != null && !name.isBlank()) {
+            for (Character c : characters) {
+                if (c.getName().equalsIgnoreCase(name)) {
+                    return c;
+                }
+            }
+        }
+        return getCharacter();
+    }
+
+    /** The PC that owns {@code mule}, same fallback convention as {@link #ownerOf(Retainer)}. */
+    @JsonIgnore
+    public Character ownerOf(Mule mule) {
+        String name = mule.getOwner();
         if (name != null && !name.isBlank()) {
             for (Character c : characters) {
                 if (c.getName().equalsIgnoreCase(name)) {

@@ -8,6 +8,7 @@ import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
 import java.util.Random;
@@ -17,7 +18,7 @@ class ExplorationServiceTest {
 
     private final Dice dice = new Dice(new Random(1));
     private final ExplorationService service = new ExplorationService(
-            dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService());
+            dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
     private final CharacterFactory factory = new CharacterFactory(dice);
 
     @Test
@@ -45,5 +46,28 @@ class ExplorationServiceTest {
         // The old (buggy) formula `1 + livingRetainers().size()` would have said 2 here (assuming only
         // one PC); the correct count is 2 living PCs + 1 living retainer.
         assertThat(service.partySize(save)).isEqualTo(3);
+    }
+
+    @Test
+    void partySizeCountsALivingMuleButNotADeadOne() {
+        SaveGame save = new SaveGame();
+        save.setCharacter(factory.create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9)));
+        assertThat(service.partySize(save)).isEqualTo(1);
+
+        Mule mule = new Mule();
+        mule.setName("Mule");
+        mule.setMaxHp(9);
+        mule.setCurrentHp(9);
+        save.getMules().add(mule);
+
+        assertThat(service.partySize(save)).isEqualTo(2);
+
+        Mule deadMule = new Mule();
+        deadMule.setName("Fallen");
+        deadMule.setMaxHp(9);
+        deadMule.setCurrentHp(0);
+        save.getMules().add(deadMule); // dead -- must not count
+
+        assertThat(service.partySize(save)).isEqualTo(2);
     }
 }

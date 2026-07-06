@@ -261,8 +261,41 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
     actor the same way its in-combat branch always did.
   - Buying torches/lanterns/oil for a non-primary PC now surfaces an explicit caveat that party light is
     still drawn only from the first-rolled PC's stock (`LightingService`'s existing, unchanged design).
+- **Milestone 18** — pack mule: `/mule buy [pc-name] [name]` (30 gp, town only) buys the party a single
+  mule — gygax75-rules: "a single mule may be brought into a dungeon by a party" — to haul gold so
+  dungeon loot doesn't drag a PC's own encumbrance down. It's a real **OSE-statted `Combatant`** (the
+  Referee's Tome bestiary entry: AC 7 [12], HD 2, THAC0 18, kick 1d4, `MuleFactory` rolls its hp) — it
+  takes a slot in `Formation`/marching order (`/order`) alongside PCs and retainers, defaulting toward
+  the back of the toughness-sorted auto-placement tail, and monsters can target and kill it like anyone
+  else; it just never attacks on its own initiative (OSE: "cannot be trained to attack on command" —
+  nothing in `CombatService`'s auto-attack loop ever calls its action, so this fell out for free rather
+  than needing a new "won't fight" flag). Killing it spills whatever gold it's carrying — every living
+  PC scoops up as much as their own remaining carry capacity allows (`Encumbrance.capacityRemaining`, a
+  new hard 2400gp cap from gygax75-rules' full coin-weight system — 1 coin = 1 cn there, same unit the
+  mule's own capacity above already uses — scoped narrowly to gold rather than a full item-weight
+  rewrite of `Encumbrance`), crediting XP for their own recovered share the same 1-XP-per-gp rate as
+  ordinary dungeon treasure; whatever nobody has room for is left behind with the corpse
+  (`CombatService.recoverMuleCargo`). This is the only place in delve a PC's gold is ever hard-capped —
+  everywhere else (loot, pregen wealth, hiring) is untouched, so an already-wealthy pregen'd character
+  simply can't scoop up more from a mule's corpse, rather than retroactively capping gold they already
+  have. Fixed a related gap the mule's arrival exposed: a monster's DRAIN-effect hit used to be a
+  complete no-op against any non-`Advanceable` target (impossible before, since PC and Retainer were the
+  only two `Combatant`s and both are `Advanceable`) — it now falls back to ordinary damage instead of
+  silently doing nothing.
+  `/mule load`/`unload [pc-name] <gold>` shifts gold between a PC's purse and the mule (capped at
+  4000 gp: gygax75-rules' cn-weight capacity, and since it defines 1 coin = 1 cn, that capacity is
+  already denominated in gold — no item-weight system needed to model it); past 2000 gp it's "heavily
+  loaded" and slows to 60'/turn, dragging down the whole party's group movement rate (`CombatService`'s
+  existing slowest-member rule) the same way an overloaded PC already could, which matters most for
+  `/flee`'s evasion check. `/mule handler <name>` assigns who leads it — a PC or retainer with a free
+  hand, re-picked automatically on death/desertion each dungeon turn, mirroring `LightingService`'s
+  light-bearer pattern exactly (`MuleService`) — a separate concept from the mule's own combat stats
+  (leading it is about hands, not toughness). The mule counts toward the party for the wandering-monster
+  size check, and costs its owner a flat weekly stabling fee in town (`TownService`, same idiom as
+  retainer upkeep, no desertion equivalent since a mule has no loyalty to lose). `/dismiss <name>`
+  releases it same as a retainer.
 
-All milestones are complete (225 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
+All milestones are complete (303 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
 for the roadmap.
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
@@ -303,8 +336,12 @@ half-build it:
 - **Classes**: the custom demihuman classes (Barbarian, Druid, Knight, Warden, Gnome, Half-Orc, Wood
   Elf), expertise-point thief skills beyond Remove Traps (needs lockpicking/stealth subsystems that
   don't exist), alignment/languages (no mechanical hook to attach them to), true coin-weight
-  encumbrance (would replace the existing tested `Encumbrance` model wholesale), and the one-level-per-
-  session XP cap / alternate reroll-all-HD leveling method.
+  encumbrance (would replace the existing tested `Encumbrance` model wholesale, folding in item weight
+  for gear too, not just gold, and its own movement-rate tiers instead of the current armor-based ones —
+  Milestone 18 above only carved out a narrow slice of it, a hard 2400gp cap gating mule-cargo recovery
+  specifically, deliberately not the full rewrite; the mule's own capacity won't need rework when this
+  lands either way, since gygax75-rules already defines 1 coin = 1 cn, the same unit its gold-count
+  capacity uses today), and the one-level-per-session XP cap / alternate reroll-all-HD leveling method.
 
 ### Multi-PC party support (Phase 1)
 
@@ -373,8 +410,11 @@ half-built:
 | `/attack [n]` | Strike in combat (one round); optionally target enemy #n. |
 | `/flee` | Flee combat to an adjacent room. |
 | `/hire [pc-name] <class> [name]` | Recruit a retainer in town, or bulk-hire with `<class> all` / `smart all` / `all` / `random all`; name a PC first to hire using their gold/Charisma. `hire party [target]` best-effort fills the whole party toward a headcount (default 9). |
-| `/party` | List your character and retainers (rank, engagement, weapon class). |
-| `/dismiss <name>` | Release a retainer. |
+| `/party` | List your character and retainers (rank, engagement, weapon class), plus the party's mule if it has one. |
+| `/dismiss <name>` | Release a retainer, or the party's mule by name. |
+| `/mule buy [pc-name] [name]` | Buy the party's one mule in town (30 gp; AC 7, its own OSE stat block); auto-assigns a free-handed handler if one exists. |
+| `/mule load [pc-name] <gold>` / `/mule unload [pc-name] <gold>` | Shift gold between a PC's purse and the mule (capped at its 4000 gp carrying limit). |
+| `/mule handler <name>` | View or reassign who leads the mule — a PC or retainer with a free hand. |
 | `/order [name1 name2 ...]` | View or set your marching order (front to back). |
 | `/wield [pc-name] <item name>` | Wield a recognized inventory item as your main weapon; `wield shield`/`wield unshield` adjusts your shield; name a PC first in a multi-PC party. |
 | `/pole [on\|off]` | Toggle probing ahead with a 10-foot pole (passive trap sense; AC risk if surprised). |

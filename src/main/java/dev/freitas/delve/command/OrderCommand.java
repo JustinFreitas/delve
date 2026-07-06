@@ -6,6 +6,7 @@ import dev.freitas.delve.discord.HelpContext;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
@@ -69,6 +70,11 @@ public class OrderCommand extends Command {
                 unlisted.add(r.getName());
             }
         }
+        for (Mule m : save.getMules()) {
+            if (!seen.contains(m.getName())) {
+                unlisted.add(m.getName());
+            }
+        }
 
         save.setMarchingOrder(newOrder);
         ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);
@@ -103,6 +109,7 @@ public class OrderCommand extends Command {
     public void provideHelp(HelpContext help) {
         help.addUsage("[name1 name2 ...]");
         help.addDescription("Views or sets your marching order, front to back (`me`/your name for yourself, "
-                + "retainer names otherwise). Unlisted living members are placed at the back. Not usable mid-combat.");
+                + "retainer or mule names otherwise). Unlisted living members are placed at the back. "
+                + "Not usable mid-combat.");
     }
 }
