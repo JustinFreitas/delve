@@ -54,5 +54,5 @@ input[type=number] { width: 4.5rem; }
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   padding: 0.7rem; margin-bottom: 0.8rem;
 }
-#state .k { color: var(--muted); }
+.k { color: var(--muted); }
 #character pre { white-space: pre-wrap; margin: 0; }

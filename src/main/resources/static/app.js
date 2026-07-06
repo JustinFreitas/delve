@@ -2,6 +2,11 @@
 
 const $ = (sel) => document.querySelector(sel);
 
+// The PC currently selected in the switcher (null = the primary/first-rolled PC). Purely a client-side
+// choice, sent explicitly as `pc` on every PC-targeted action -- the server holds no "current PC"
+// session state, same as Discord's per-message [pc-name] argument.
+let selectedPc = null;
+
 function cookie(name) {
   const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
   return m ? decodeURIComponent(m[1]) : null;
@@ -45,11 +50,46 @@ function renderState(s) {
     parts.push(`<span class="k">HP:</span> ${s.currentHp}/${s.maxHp}`);
     parts.push(`<span class="k">Where:</span> ${s.inDungeon ? "dungeon L" + s.dungeonLevel + ", turn " + s.dungeonTurn : "town"}`);
     parts.push(`<span class="k">State:</span> ${s.sessionState}${s.inCombat ? " ⚔️" : ""}`);
-    if (s.retainers) parts.push(`<span class="k">Retainers:</span> ${s.retainers}`);
+    for (const r of s.retainers || []) {
+      parts.push(`<span class="k">Retainer:</span> ${r.name} (L${r.level} ${r.characterClass}) ${r.currentHp}/${r.maxHp} hp — ${r.owner}'s`);
+    }
   } else {
     parts.push("<em>No character yet — roll or pregen one.</em>");
   }
   $("#state").innerHTML = parts.join("<br>");
+  populatePcSelect(s.characters || []);
+  renderMule(s.mule);
+}
+
+// Populates the PC switcher from every PC in the party; keeps the current selection if it's still a
+// valid PC, otherwise falls back to the primary. Same select-population pattern as loadModules().
+function populatePcSelect(characters) {
+  const sel = $("#pc-select");
+  const previous = selectedPc;
+  sel.innerHTML = "";
+  for (const c of characters) {
+    const o = document.createElement("option");
+    o.value = c.name;
+    o.textContent = `${c.name} (L${c.level} ${c.characterClass})${c.primary ? " [primary]" : ""}${c.alive ? "" : " [dead]"}`;
+    sel.appendChild(o);
+  }
+  if (previous && characters.some((c) => c.name === previous)) {
+    sel.value = previous;
+  } else {
+    selectedPc = null;
+    if (characters.length) sel.value = characters.find((c) => c.primary)?.name || characters[0].name;
+  }
+}
+
+function renderMule(mule) {
+  const el = $("#mule");
+  if (!mule) {
+    el.innerHTML = "<em>No mule.</em>";
+    return;
+  }
+  el.innerHTML = `<span class="k">${mule.name}</span> — handler: ${mule.handler || "none"}<br>`
+    + `AC ${mule.armorClass}  ${mule.currentHp}/${mule.maxHp} hp<br>`
+    + `${mule.carriedGold}/${mule.capacityMax} gp carried`;
 }
 
 // Apply an ActionResult: log its lines and refresh state, then the character panel.
@@ -62,7 +102,8 @@ function applyResult(r) {
 }
 
 async function loadCharacter() {
-  const r = await api("GET", "/api/character");
+  const path = selectedPc ? `/api/character?pc=${encodeURIComponent(selectedPc)}` : "/api/character";
+  const r = await api("GET", path);
   const el = $("#character");
   if (r.status === 204 || !r.data) { el.innerHTML = "<em>None yet.</em>"; return; }
   const c = r.data;
@@ -100,6 +141,9 @@ function wire() {
       applyResult(await api("POST", "/api/delve/move", { direction: b.dataset.move }));
     }));
 
+  // Actions that target a specific PC send `pc: selectedPc` (null when it's still the primary, which
+  // the server treats identically to omitting it); whole-party actions (look/flee/town/party) don't.
+  const pcTargeted = new Set(["attack", "quaff"]);
   const simple = { look: ["GET", "/api/delve/look"], search: ["POST", "/api/delve/search"],
     attack: ["POST", "/api/delve/attack"], flee: ["POST", "/api/delve/flee"],
     quaff: ["POST", "/api/delve/quaff"], town: ["POST", "/api/delve/town"], party: ["GET", "/api/delve/party"] };
@@ -107,8 +151,14 @@ function wire() {
     b.addEventListener("click", async () => {
       const [m, p] = simple[b.dataset.action];
       logYou(b.dataset.action);
-      applyResult(await api(m, p, m === "POST" ? {} : undefined));
+      const body = pcTargeted.has(b.dataset.action) ? { pc: selectedPc } : (m === "POST" ? {} : undefined);
+      applyResult(await api(m, p, body));
     }));
+
+  $("#pc-select").addEventListener("change", () => {
+    selectedPc = $("#pc-select").value || null;
+    loadCharacter();
+  });
 
   $("#cmd-send").addEventListener("click", sendCommand);
   $("#cmd").addEventListener("keydown", (e) => { if (e.key === "Enter") sendCommand(); });
@@ -127,12 +177,33 @@ function wire() {
   });
 
   $("#export-text").addEventListener("click", async () => {
-    const r = await api("GET", "/api/dm/export?format=text");
+    const r = await api("GET", "/api/dm/export?format=text" + (selectedPc ? "&pc=" + encodeURIComponent(selectedPc) : ""));
     if (r.data) download("character.txt", r.data, "text/plain");
   });
   $("#export-json").addEventListener("click", async () => {
-    const r = await api("GET", "/api/dm/export?format=json");
+    const r = await api("GET", "/api/dm/export?format=json" + (selectedPc ? "&pc=" + encodeURIComponent(selectedPc) : ""));
     if (r.data) download("character.json", JSON.stringify(r.data, null, 2));
+  });
+
+  $("#buy-mule-btn").addEventListener("click", async () => {
+    logYou("mule buy");
+    applyResult(await api("POST", "/api/delve/mule/buy", { pc: selectedPc, name: null }));
+  });
+  $("#mule-load-btn").addEventListener("click", async () => {
+    const gold = Number($("#mule-gold").value);
+    logYou("mule load " + gold);
+    applyResult(await api("POST", "/api/delve/mule/load", { pc: selectedPc, gold }));
+  });
+  $("#mule-unload-btn").addEventListener("click", async () => {
+    const gold = Number($("#mule-gold").value);
+    logYou("mule unload " + gold);
+    applyResult(await api("POST", "/api/delve/mule/unload", { pc: selectedPc, gold }));
+  });
+  $("#mule-handler-btn").addEventListener("click", async () => {
+    const name = $("#mule-handler").value.trim();
+    if (!name) return;
+    logYou("mule handler " + name);
+    applyResult(await api("POST", "/api/delve/mule/handler", { name }));
   });
   $("#npc-btn").addEventListener("click", async () => {
     const r = await api("POST", "/api/dm/npc",
@@ -160,17 +231,17 @@ async function sendCommand() {
   switch (v) {
     case "open": r = await api("POST", "/api/delve/open", { direction: arg }); break;
     case "move": case "go": r = await api("POST", "/api/delve/move", { direction: arg }); break;
-    case "prepare": r = await api("POST", "/api/delve/prepare", { spell: arg }); break;
-    case "hire": { const [c, ...n] = rest; r = await api("POST", "/api/delve/hire", { cls: c, name: n.join(" ") }); break; }
-    case "dismiss": r = await api("POST", "/api/delve/dismiss", { name: arg }); break;
+    case "prepare": r = await api("POST", "/api/delve/prepare", { pc: selectedPc, spell: arg }); break;
+    case "hire": { const [c, ...n] = rest; r = await api("POST", "/api/delve/hire", { pc: selectedPc, cls: c, name: n.join(" ") }); break; }
+    case "dismiss": r = await api("POST", "/api/delve/dismiss", { pc: selectedPc, name: arg }); break;
     case "cast": {
       // last token may be a target number
       let target = null, spell = arg;
       const last = rest[rest.length - 1];
       if (rest.length > 1 && /^\d+$/.test(last)) { target = Number(last); spell = rest.slice(0, -1).join(" "); }
-      r = await api("POST", "/api/delve/cast", { spell, target }); break;
+      r = await api("POST", "/api/delve/cast", { pc: selectedPc, spell, target }); break;
     }
-    case "attack": r = await api("POST", "/api/delve/attack", { target: arg ? Number(arg) : null }); break;
+    case "attack": r = await api("POST", "/api/delve/attack", { pc: selectedPc, target: arg ? Number(arg) : null }); break;
     default: logEntry("Unknown command. Try: open <dir>, cast <spell> [n], prepare <spell>, hire <class> <name>, dismiss <name>.", true); return;
   }
   applyResult(r);

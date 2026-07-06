@@ -51,14 +51,14 @@ public class DmController {
 
     @GetMapping("/dm/export")
     public ResponseEntity<?> export(@AuthenticationPrincipal OAuth2User principal,
-            @RequestParam(defaultValue = "json") String format) {
+            @RequestParam(defaultValue = "json") String format, @RequestParam(required = false) String pc) {
         long id = userId(principal);
         if (format.equalsIgnoreCase("text")) {
-            String text = game.exportText(id);
+            String text = game.exportText(id, pc);
             return text == null ? ResponseEntity.noContent().build()
                     : ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body(text);
         }
-        Map<String, Object> json = game.exportJson(id);
+        Map<String, Object> json = game.exportJson(id, pc);
         return json == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(json);
     }
 

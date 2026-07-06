@@ -61,7 +61,9 @@ To enable it:
    ./gradlew bootRun
    ```
 3. Open the host, **Log in with Discord**, then play (roll/pregen a PC, enter a module, fight) and use
-   the DM tools (pregen/roster/npc, export to text/JSON) from the sidebar.
+   the DM tools (pregen/roster/npc, export to text/JSON) from the sidebar. Rolling more than one PC adds
+   to the party (up to 8) with a switcher to act as any of them; the sidebar also has a Mule panel to
+   buy one and manage its gold/handler.
 
 The web UI is a lean, dependency-free static page (`src/main/resources/static/`) talking to a REST API
 (`/api/**`) via a shared `GameFacade`. **The web app holds no Anthropic key** — PDF→module conversion
@@ -319,8 +321,26 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   gained it as the first (best-affordable) tier ahead of chain mail. Deliberately not modeled: container
   capacity (backpack/sack capacity limits) and gygax75's hand-usage-for-sacks-in-combat rules — total
   weight carried is tracked, not what's stowed in which named container.
+- **Milestone 20** — web interface catches up to multi-PC parties and the mule: `GameFacade` predates
+  both (it shipped before either existed), so every PC-targeted method (`character`, `cast`, `prepare`,
+  `quaff`, `hire`, `dismiss`, `exportText`/`exportJson`) gains an optional `pcName`, resolved the same
+  way Discord's `[pc-name]` argument is (`save.resolve`), just via a structured request field instead of
+  a leading token in free text; `attack`/`cast`'s in-combat branch pass it straight through as
+  `CombatService`'s existing `actorToken` overloads (already there, just never called from the facade
+  before). `rollCharacter`/`pregen` are additive now (cap-checked, name-collision-checked, session-reset
+  only on the very first PC) instead of always replacing the primary — the web could never build a 2nd
+  PC before this. Four new mule actions (`buyMule`/`loadMule`/`unloadMule`/`muleHandler`) mirror
+  `MuleCommand` exactly. `party()` now reuses `PartySummary.text(save)` (Discord's own renderer) instead
+  of a second, drifted single-PC implementation that didn't know about the mule at all.
+  `StateSnapshot` gained `characters` (every PC), a real `retainers` list (was a bare count), and a
+  nullable `mule` summary; the static UI gained a PC switcher (`#pc-select`, same select-population
+  pattern `loadModules()` already used) and a Mule panel (buy/load/unload/assign-handler), reusing the
+  existing `.panel`/`.row`/`.btn` primitives — no new design language. First tests for the `api` package
+  (`GameFacadeTest`, 14 cases): additive roll/pregen, pc-name resolution success/failure, `party()`
+  parity with `PartySummary`, and the mule actions. The live OAuth browser flow itself isn't
+  exercised here — no Discord OAuth app credentials exist in this environment to test it end-to-end.
 
-All milestones are complete (319 tests green).
+All milestones are complete (333 tests green).
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
   doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps
@@ -388,17 +408,11 @@ half-built:
   `Character` directly (was `(SaveGame, Spell)`, always `save.getCharacter()`) — `/cast`'s out-of-combat
   branch (healing/utility spells) now respects the named actor the same way its in-combat branch always
   did.
-- **`/autodelve`** doesn't yet make multi-PC autopilot decisions (whose HP triggers a retreat? who
-  quaffs a potion?) — its simulation loop threads one PC through every decision today.
-- **The web interface** (`GameFacade`/`StateSnapshot`/`app.js`) still only shows/plays the first PC —
-  unaffected by the data-model change, just not updated to expose PC #2+ yet.
-- **Retainer ownership**: `/hire` (Milestone 15) lets any PC's Charisma/gold authorize a hire, but
-  retainers still join one shared, undifferentiated party-wide pool afterward — there's no persistent
-  "this retainer belongs to PC X" concept (per-PC upkeep, loyalty/desertion, or `/party` grouping).
-  Switching persisted marching-order/light-bearer tokens from `"@you"` to real PC names once 2+ PCs
-  exist is a separate, smaller refinement, not blocking.
-- **"Mules"** were mentioned as part of the party-size cap but delve has no such entity modeled at all
-  yet.
+- **`/autodelve`** only got single-delve multi-PC awareness (retreat/danger-avoidance/potion-quaffing
+  keyed to whichever PC is worst-off by HP) — the harder "grind to a target level across many delves
+  with multiple PCs" question is still explicitly tabled as a separate design problem.
+- The web interface (Milestone 20), retainer ownership (shipped separately, persistent per-PC
+  ownership/upkeep), and mules (Milestone 18) — all three previously listed here as open — are done.
 
 ### Seeding a Desert of Desolation party (example)
 ```

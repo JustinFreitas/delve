@@ -53,6 +53,9 @@
 
         <div class="panel">
           <h3>Character</h3>
+          <div class="row">
+            <select id="pc-select"></select>
+          </div>
           <div id="character"><em>None yet.</em></div>
           <div class="row">
             <input id="roll-class" type="text" placeholder="class (e.g. fighter)" />
@@ -66,6 +69,23 @@
           <div class="row">
             <button id="export-text">Export text</button>
             <button id="export-json">Export JSON</button>
+          </div>
+        </div>
+
+        <div class="panel" id="mule-panel">
+          <h3>Mule</h3>
+          <div id="mule"><em>No mule.</em></div>
+          <div class="row">
+            <button id="buy-mule-btn">Buy mule (town, 30 gp)</button>
+          </div>
+          <div class="row">
+            <input id="mule-gold" type="number" min="1" value="100" />
+            <button id="mule-load-btn">Load</button>
+            <button id="mule-unload-btn">Unload</button>
+          </div>
+          <div class="row">
+            <input id="mule-handler" type="text" placeholder="handler name" />
+            <button id="mule-handler-btn">Assign</button>
           </div>
         </div>
 
