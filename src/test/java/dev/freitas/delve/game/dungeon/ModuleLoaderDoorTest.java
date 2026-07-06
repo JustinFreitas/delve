@@ -27,6 +27,12 @@ class ModuleLoaderDoorTest {
     }
 
     @Test
+    void parseDoorRecognizesOneWayAndItsAlias() {
+        assertThat(ModuleLoader.parseDoor("one-way")).isEqualTo(DoorState.ONE_WAY);
+        assertThat(ModuleLoader.parseDoor("oneway")).isEqualTo(DoorState.ONE_WAY);
+    }
+
+    @Test
     void mapRoomMarksALockedDoorAsEverLocked() {
         ModuleExit me = new ModuleExit("north", 2, "locked", false, null, null);
         ModuleRoom mr = new ModuleRoom(1, "Vault", null, null, List.of(me), null, 0, null, null, null,
@@ -90,5 +96,38 @@ class ModuleLoaderDoorTest {
         assertThat(back.isEverLocked()).isTrue();
         assertThat(back.isDoorTrapped()).isTrue();
         assertThat(back.getDoorTrapDescription()).isEqualTo("a poisoned needle in the lock");
+    }
+
+    @Test
+    void anAuthorKeyedOneWayReturnExitSurvivesBidirectionalSynthesisUntouched() {
+        // Room 1 keys a normal, passable exit east toward room 2. Room 2 separately keys its own
+        // return exit west as ONE_WAY -- both directions authored explicitly, unlike the
+        // auto-synthesized case above where room 2 keys nothing at all.
+        ModuleExit forward = new ModuleExit("east", 2, "closed", false, null, null);
+        ModuleRoom room1 = new ModuleRoom(1, "Antechamber", null, null, List.of(forward), null, 0, null,
+                null, null, false, false, null, null, 0);
+        ModuleExit reverse = new ModuleExit("west", 1, "one-way", false, null, null);
+        ModuleRoom room2 = new ModuleRoom(2, "Sealed Vault", null, null, List.of(reverse), null, 0, null,
+                null, null, false, false, null, null, 0);
+
+        DungeonLevel level = new DungeonLevel(1);
+        level.addRoom(ModuleLoader.mapRoom(room1, new ArrayList<>()));
+        level.addRoom(ModuleLoader.mapRoom(room2, new ArrayList<>()));
+
+        ModuleLoader.makeExitsBidirectional(level);
+
+        Exit forwardExit = level.room(1).getExits().values().stream()
+                .filter(e -> e.getDestinationRoomId() == 2)
+                .findFirst()
+                .orElseThrow();
+        Exit reverseExit = level.room(2).getExits().values().stream()
+                .filter(e -> e.getDestinationRoomId() == 1)
+                .findFirst()
+                .orElseThrow();
+        // Bidirectional synthesis only fills in a *missing* reverse exit -- since room 2 already keys
+        // its own west exit, synthesis must leave it alone rather than overwriting it to match room 1's
+        // CLOSED state.
+        assertThat(forwardExit.getDoor()).isEqualTo(DoorState.CLOSED);
+        assertThat(reverseExit.getDoor()).isEqualTo(DoorState.ONE_WAY);
     }
 }

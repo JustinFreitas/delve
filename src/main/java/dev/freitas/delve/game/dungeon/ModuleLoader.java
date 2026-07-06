@@ -274,6 +274,7 @@ public final class ModuleLoader {
             case "stuck" -> DoorState.STUCK;
             case "locked" -> DoorState.LOCKED;
             case "unlocked" -> DoorState.UNLOCKED;
+            case "one-way", "oneway" -> DoorState.ONE_WAY;
             default -> DoorState.NONE;
         };
     }

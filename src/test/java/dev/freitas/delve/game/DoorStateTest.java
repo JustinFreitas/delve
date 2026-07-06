@@ -27,8 +27,8 @@ import dev.freitas.delve.game.session.SpellService;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 
-/** {@code DoorState}'s locked/unlocked/ajar states, lock-picking, door-lock traps, swing-shut, and
-    spike/wedge — the gygax75 "doors" backlog item. */
+/** {@code DoorState}'s locked/unlocked/ajar states, lock-picking, door-lock traps, swing-shut,
+    spike/wedge, and one-way doors — the gygax75 "doors" backlog item. */
 class DoorStateTest {
 
     // --- Locked / unlocked / lock-picking -----------------------------------
@@ -235,6 +235,81 @@ class DoorStateTest {
         assertThat(safe.getCharacter().getCurrentHp()).isEqualTo(hpBefore);
     }
 
+    // --- One-way doors -----------------------------------------------------------
+
+    @Test
+    void forwardTraversalThroughAOneWayDoorWorksNormally() {
+        Dice dice = new Dice(new Random(70));
+        ExplorationService service = newService(dice);
+        SaveGame save = asymmetricTwoRoomSave(dice, DoorState.NONE, DoorState.ONE_WAY);
+
+        ExplorationResult result = service.move(save, Direction.EAST);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(save.getSession().getCurrentRoomId()).isEqualTo(1);
+    }
+
+    @Test
+    void movingBackThroughAOneWayDoorFailsWithoutSuggestingOpen() {
+        Dice dice = new Dice(new Random(71));
+        ExplorationService service = newService(dice);
+        SaveGame save = asymmetricTwoRoomSave(dice, DoorState.NONE, DoorState.ONE_WAY);
+        service.move(save, Direction.EAST); // now standing in room 1, facing the blocked exit west
+
+        ExplorationResult result = service.move(save, Direction.WEST);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.text()).contains("won't budge").contains("only opens from the other side");
+        assertThat(result.text()).doesNotContain("`open");
+        assertThat(save.getSession().getCurrentRoomId()).isEqualTo(1); // didn't move
+    }
+
+    @Test
+    void openingAOneWayDoorFromTheBlockedSideAlwaysFailsWithNoStateChangeOrDiceRoll() {
+        Dice dice = new Dice(new Random(72));
+        ExplorationService service = newService(dice);
+        SaveGame save = asymmetricTwoRoomSave(dice, DoorState.NONE, DoorState.ONE_WAY);
+        service.move(save, Direction.EAST);
+        Exit blocked = save.getSession().currentRoom().getExits().get(Direction.WEST);
+        int turnAfterMove = save.getSession().getDungeonTurn();
+
+        for (int i = 0; i < 20; i++) {
+            ExplorationResult result = service.open(save, Direction.WEST);
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.text()).contains("only opens from the other side");
+        }
+        assertThat(blocked.getDoor()).isEqualTo(DoorState.ONE_WAY); // never budged
+        assertThat(save.getSession().getDungeonTurn()).isEqualTo(turnAfterMove); // no turn spent on a doomed attempt
+    }
+
+    @Test
+    void spikingAOneWayDoorRefusesForBothHoldOpenAndHoldShut() {
+        Dice dice = new Dice(new Random(73));
+        ExplorationService service = newService(dice);
+        SaveGame save = asymmetricTwoRoomSave(dice, DoorState.NONE, DoorState.ONE_WAY);
+        service.move(save, Direction.EAST);
+        Exit blocked = save.getSession().currentRoom().getExits().get(Direction.WEST);
+
+        ExplorationResult holdOpen = service.spike(save, Direction.WEST, true);
+        ExplorationResult holdShut = service.spike(save, Direction.WEST, false);
+
+        assertThat(holdOpen.isSuccess()).isFalse();
+        assertThat(holdShut.isSuccess()).isFalse();
+        assertThat(blocked.getDoor()).isEqualTo(DoorState.ONE_WAY); // not corrupted into STUCK/OPEN
+        assertThat(blocked.isSpiked()).isFalse();
+    }
+
+    @Test
+    void roomDescriptionLabelsAOneWayExitDistinctlyFromAnOrdinaryDoor() {
+        Dice dice = new Dice(new Random(74));
+        ExplorationService service = newService(dice);
+        SaveGame save = asymmetricTwoRoomSave(dice, DoorState.NONE, DoorState.ONE_WAY);
+
+        ExplorationResult result = service.move(save, Direction.EAST);
+
+        assertThat(result.text()).contains("west (one-way door)");
+    }
+
     // --- Rendering -------------------------------------------------------------
 
     @Test
@@ -282,6 +357,40 @@ class DoorStateTest {
         b.setDescription("another test chamber");
         a.getExits().put(Direction.EAST, new Exit(Direction.EAST, 1, doorState, false));
         b.getExits().put(Direction.WEST, new Exit(Direction.WEST, 0, doorState, false));
+        level.addRoom(a);
+        level.addRoom(b);
+        level.setEntranceRoomId(0);
+        dungeon.addLevel(level);
+
+        session.setDungeon(dungeon);
+        session.setCurrentLevel(0);
+        session.setCurrentRoomId(0);
+        session.setState(SessionState.EXPLORING);
+        session.setLightTurnsRemaining(6);
+        session.setActiveLight(LightSource.TORCH);
+        session.setLightBearer(SaveGame.PLAYER_SLOT);
+        return save;
+    }
+
+    /** As {@link #twoRoomSave}, but the forward (room 0 -> room 1) and reverse (room 1 -> room 0) exits
+        get *different* door states, for testing a one-way door -- every other two-room fixture in this
+        file deliberately keeps both sides identical. */
+    private SaveGame asymmetricTwoRoomSave(Dice dice, DoorState forwardDoor, DoorState reverseDoor) {
+        Character c = new CharacterFactory(dice).create("Tester", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
+        c.setTorches(9);
+        c.setShield(false);
+        SaveGame save = new SaveGame();
+        save.setCharacter(c);
+        GameSession session = save.getSession();
+
+        Dungeon dungeon = new Dungeon();
+        DungeonLevel level = new DungeonLevel(1);
+        Room a = new Room(0);
+        a.setDescription("a test chamber");
+        Room b = new Room(1);
+        b.setDescription("another test chamber");
+        a.getExits().put(Direction.EAST, new Exit(Direction.EAST, 1, forwardDoor, false));
+        b.getExits().put(Direction.WEST, new Exit(Direction.WEST, 0, reverseDoor, false));
         level.addRoom(a);
         level.addRoom(b);
         level.setEntranceRoomId(0);

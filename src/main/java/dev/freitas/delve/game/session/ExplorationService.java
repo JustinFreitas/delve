@@ -118,6 +118,10 @@ public class ExplorationService {
         if (exit == null || !exit.isKnown()) {
             return ExplorationResult.failure("There is no exit to the " + direction.lower() + ".");
         }
+        if (exit.getDoor() == DoorState.ONE_WAY) {
+            return ExplorationResult.failure("The way " + direction.lower()
+                    + " won't budge — this passage only opens from the other side.");
+        }
         if (!exit.getDoor().isPassable()) {
             String doorName = exit.getDoor().name().toLowerCase();
             String article = doorName.startsWith("u") ? "an" : "a";
@@ -370,6 +374,10 @@ public class ExplorationService {
                 advanceTurn(save, result); // picking a lock takes time, success or not
                 return result;
             }
+            case ONE_WAY -> {
+                return ExplorationResult.failure("This door only opens from the other side — force, "
+                        + "picks, and spikes won't help.");
+            }
             default -> throw new IllegalStateException("Unhandled door state: " + door);
         }
     }
@@ -386,6 +394,9 @@ public class ExplorationService {
         Exit exit = room.getExits().get(direction);
         if (exit == null || !exit.isKnown() || exit.getDoor() == DoorState.NONE) {
             return ExplorationResult.failure("There is no door to the " + direction.lower() + " to spike.");
+        }
+        if (exit.getDoor() == DoorState.ONE_WAY) {
+            return ExplorationResult.failure("This door won't take a spike — it only opens from the other side.");
         }
         if (exit.isSpiked()) {
             return ExplorationResult.failure("That door already has a spike jammed in it.");
@@ -791,6 +802,7 @@ public class ExplorationService {
                 case UNLOCKED -> "unlocked door";
                 case STUCK -> "stuck door";
                 case LOCKED -> "locked door";
+                case ONE_WAY -> "one-way door";
             };
             String trapWarning = exit.isDoorTrapDetected() && !exit.isDoorTrapSprung() ? " ⚠️trapped lock" : "";
             parts.add(entry.getKey().lower() + " (" + door + trapWarning + ")");

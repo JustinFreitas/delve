@@ -371,8 +371,24 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   JSON show each container by name ("Backpack: ...", "Held small sack: ...") instead of one flat
   "Equipment" line (renamed "On person" for what's left in the exempt list); `PregenExport`'s JSON gained
   a structured `containers` array alongside the renamed `onPerson` list.
+- **Milestone 22** — one-way doors: gygax75-rules' "one way doors whether mechanical or magical only
+  allow passage one way," the last item left in the Doors Known Gap. A new `DoorState.ONE_WAY` constant
+  is authoring-only (never procedurally generated, same as `AJAR`) and lives only on the *blocked* side's
+  `Exit` — the passable direction keeps its own ordinary door state, so a one-way connection is just two
+  independently-authored exits rather than a new mechanic layered on top of normal doors. A DM keys both
+  directions explicitly in the module JSON (the passable side normally, the blocked side with
+  `"door": "one-way"`), which needed no new `ModuleExit` schema field: `ModuleLoader`'s existing
+  bidirectional-synthesis step only fills in a *missing* reverse exit, so an explicitly-authored blocked
+  side is left untouched automatically. `open`/`spike` both refuse unconditionally on a `ONE_WAY` exit —
+  no dice roll, no state change, ever, since force/picks/spikes are all meaningless against a door that's
+  structurally one-way — and `/move`'s failure message and the room's exit list ("west (one-way door)")
+  each got their own clear wording instead of the generic "blocked by a ___ door, try `open`" text (which
+  would otherwise wrongly suggest opening it could ever work). Deliberately not modeled: `DungeonGenerator`
+  never rolls one of these on its own — a randomly-placed one-way connection could seal the party away
+  from the stairs/exit with no guaranteed way back, a real correctness risk the generator has no
+  safeguard against today, so this stays a deliberate DM-authored placement only.
 
-All milestones are complete (374 tests green).
+All milestones are complete (381 tests green).
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
   doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps
@@ -401,9 +417,6 @@ All milestones are complete (374 tests green).
 
 Each pass above deliberately deferred anything needing a subsystem delve doesn't have, rather than
 half-build it:
-- **Doors**: one-way doors (a deliberate can't-go-back passage, distinct from the data model's existing
-  per-direction `Exit` objects) — needs module-authoring support to actually declare one. (Swing-shut-
-  behind-you and a spike/wedge command, previously listed here, both shipped in the door-states pass.)
 - **Combat**: attacking from behind (no flanking/facing concept in `Formation`); evasion's own running-
   exhaustion and obstacle/dropped-loot/line-of-sight sub-rules (see above — folded into one flat roll
   instead of modeled individually).
