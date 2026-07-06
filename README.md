@@ -401,8 +401,9 @@ All milestones are complete (374 tests green).
 
 Each pass above deliberately deferred anything needing a subsystem delve doesn't have, rather than
 half-build it:
-- **Doors**: swing-shut-behind-you, a spike/wedge command, one-way doors — needs new `Exit`/`DoorState`
-  states plus module-authoring support.
+- **Doors**: one-way doors (a deliberate can't-go-back passage, distinct from the data model's existing
+  per-direction `Exit` objects) — needs module-authoring support to actually declare one. (Swing-shut-
+  behind-you and a spike/wedge command, previously listed here, both shipped in the door-states pass.)
 - **Combat**: attacking from behind (no flanking/facing concept in `Formation`); evasion's own running-
   exhaustion and obstacle/dropped-loot/line-of-sight sub-rules (see above — folded into one flat roll
   instead of modeled individually).
