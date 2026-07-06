@@ -61,6 +61,8 @@ public final class GearCatalog {
             new Entry("shield", 10, 100),
             // Common adventuring gear.
             new Entry("backpack", 5, 20),
+            new Entry("small sack", 1, 1),
+            new Entry("large sack", 2, 5),
             new Entry("tinderbox", 3, 5),
             new Entry("rations", 1, 30),
             new Entry("waterskin", 1, 35),

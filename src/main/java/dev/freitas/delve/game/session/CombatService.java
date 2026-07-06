@@ -33,6 +33,7 @@ import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -46,10 +47,18 @@ public class CombatService {
 
     private final Dice dice;
     private final SpellService spells;
+    private final ContainerService containers;
 
+    /** Test convenience: a plain {@code new ContainerService()} has no state of its own worth mocking. */
     public CombatService(Dice dice, SpellService spells) {
+        this(dice, spells, new ContainerService());
+    }
+
+    @Autowired
+    public CombatService(Dice dice, SpellService spells, ContainerService containers) {
         this.dice = dice;
         this.spells = spells;
+        this.containers = containers;
     }
 
     /** B/X reaction: undead always attack; otherwise the 5-tier 2d6 + CHA modifier table (only 5 or
@@ -111,6 +120,7 @@ public class CombatService {
         if (!encounter.isMelee()) {
             result.add("Range: " + encounter.getDistanceFeet() + " ft.");
         }
+        containers.reconcileHeldContainers(save, result);
         return result;
     }
 
@@ -741,6 +751,7 @@ public class CombatService {
 
         session.currentRoom().setCleared(true);
         session.setState(SessionState.EXPLORING);
+        containers.returnDroppedContainers(save, encounter);
         session.setCombat(null);
 
         result.add("");
@@ -820,6 +831,7 @@ public class CombatService {
         session.setCurrentRoomId(escape.getDestinationRoomId());
         session.currentRoom().setVisited(true);
         session.setState(SessionState.EXPLORING);
+        containers.discardDroppedContainers(save, session.getCombat(), result);
         session.setCombat(null);
 
         boolean catastrophic = save.livingCharacters().stream().anyMatch(c -> c.getCurrentHp() * 4 <= c.getMaxHp())

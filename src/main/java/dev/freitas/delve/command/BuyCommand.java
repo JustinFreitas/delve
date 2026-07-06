@@ -4,10 +4,13 @@ import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
 import dev.freitas.delve.game.engine.Armor;
+import dev.freitas.delve.game.engine.ContainerRules;
+import dev.freitas.delve.game.engine.ContainerType;
 import dev.freitas.delve.game.engine.GearCatalog;
 import dev.freitas.delve.game.engine.Hands;
 import dev.freitas.delve.game.engine.LightSource;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Container;
 import dev.freitas.delve.game.model.SaveGame;
 import org.springframework.stereotype.Component;
 
@@ -74,11 +77,15 @@ public class BuyCommand extends Command {
             buyArmor(ctx, save, pc, armorTier, prefix);
             return;
         }
+        ContainerType containerType = containerTypeFor(lower);
+        if (containerType != null) {
+            buyContainer(ctx, save, pc, containerType, qty, prefix);
+            return;
+        }
 
         int unitCost;
         String label;
         Runnable apply;
-        boolean genericGear = false;
         boolean lightSupply = false;
         if (item.equalsIgnoreCase("torch") || item.equalsIgnoreCase("torches")) {
             unitCost = LightSource.TORCH.itemCostGp();
@@ -99,21 +106,8 @@ public class BuyCommand extends Command {
             apply = () -> pc.setOilFlasks(pc.getOilFlasks() + finalQty);
             lightSupply = true;
         } else {
-            int price = GearCatalog.priceGp(item);
-            if (price < 0) {
-                ctx.reply(prefix + "Don't recognize **" + item + "**. Buy a weapon, armor, a shield, "
-                        + "`torch`/`lantern`/`oil`, or common gear (check `help buy`).");
-                return;
-            }
-            unitCost = price;
-            label = item + (qty == 1 ? "" : " ×" + qty);
-            int finalQty = qty;
-            genericGear = true;
-            apply = () -> {
-                for (int i = 0; i < finalQty; i++) {
-                    pc.getInventory().add(item);
-                }
-            };
+            buyGear(ctx, save, pc, item, qty, prefix);
+            return;
         }
 
         int total = unitCost * qty;
@@ -125,14 +119,125 @@ public class BuyCommand extends Command {
         pc.setGold(pc.getGold() - total);
         apply.run();
         ctx.getBeans().gameState.save(userId, save);
-        String wieldHint = genericGear ? " `wield " + item + "` to equip it." : "";
         // Torch/lantern/oil fuel is a shared party resource drawn only from the primary PC's stock
         // (LightingService's existing design) — flag it plainly if bought for someone else instead.
         String lightCaveat = lightSupply && pc != save.getCharacter()
                 ? " (note: only your first-rolled PC's light supplies fuel the party's shared torch/lantern today.)"
                 : "";
         ctx.reply(prefix + "Bought " + qty + " " + label + " for **" + total + " gp**; " + pc.getGold()
-                + " gp left." + wieldHint + lightCaveat);
+                + " gp left." + lightCaveat);
+    }
+
+    private void buyContainer(CommandContext ctx, SaveGame save, Character pc, ContainerType type, int qty, String prefix) {
+        int cost = GearCatalog.priceGp(type.displayName());
+        int goldBefore = pc.getGold();
+        int bought = buyContainer(save, pc, type, qty);
+        String label = type.displayName().toLowerCase();
+        if (bought == 0) {
+            if (goldBefore < cost) {
+                ctx.reply(prefix + "You need **" + cost + " gp** for a " + label + "; you have " + goldBefore + " gp.");
+            } else {
+                ctx.reply(prefix + "You have no free hand to carry another " + label + ".");
+            }
+            return;
+        }
+        ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);
+        ctx.reply(prefix + "Bought " + bought + " " + label + (bought == 1 ? "" : "s") + " for **"
+                + (goldBefore - pc.getGold()) + " gp**; " + pc.getGold() + " gp left."
+                + (bought < qty ? " (No room for the rest.)" : ""));
+    }
+
+    /** Buys up to {@code qty} of a backpack or sack: worn (no hand cost) if a worn slot of that type is
+        still free (at most one worn backpack + one worn small sack; a large sack is never worn), else
+        held if a hand is free for one more — stops (per unit) once neither is true or gold runs out.
+        Mutates {@code pc}; returns how many were actually bought (0 if none). Package-private: tests
+        exercise this directly without a {@link CommandContext}, matching this codebase's established
+        pattern (see {@code MuleCommandTest}). */
+    int buyContainer(SaveGame save, Character pc, ContainerType type, int qty) {
+        int cost = GearCatalog.priceGp(type.displayName());
+        boolean isBearer = save.tokenFor(pc).equalsIgnoreCase(save.getSession().getLightBearer());
+        int bought = 0;
+        for (int i = 0; i < qty && pc.getGold() >= cost; i++) {
+            boolean worn = ContainerRules.canWearAnother(pc.getContainers(), type);
+            if (!worn) {
+                int heldSacks = ContainerRules.heldCount(pc.getContainers());
+                if (!Hands.fits(pc.getMainWeapon(), pc.isShield(), isBearer, pc.getOffHandWeapon() != null, heldSacks + 1)) {
+                    break;
+                }
+            }
+            pc.getContainers().add(new Container(type, !worn, pc.getName()));
+            pc.setGold(pc.getGold() - cost);
+            bought++;
+        }
+        return bought;
+    }
+
+    private void buyGear(CommandContext ctx, SaveGame save, Character pc, String item, int qty, String prefix) {
+        int price = GearCatalog.priceGp(item);
+        if (price < 0) {
+            ctx.reply(prefix + "Don't recognize **" + item + "**. Buy a weapon, armor, a shield, "
+                    + "`torch`/`lantern`/`oil`, or common gear (check `help buy`).");
+            return;
+        }
+        int goldBefore = pc.getGold();
+        int bought = buyGear(save, pc, item, qty);
+        if (bought == 0) {
+            if (goldBefore < price) {
+                ctx.reply(prefix + "You need **" + price + " gp** for " + item + "; you have " + goldBefore + " gp.");
+            } else {
+                ctx.reply(prefix + "You have nowhere to put that — buy a bigger sack.");
+            }
+            return;
+        }
+        ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);
+        String label = item + (bought == 1 ? "" : " ×" + bought);
+        ctx.reply(prefix + "Bought " + label + " for **" + (goldBefore - pc.getGold()) + " gp**; " + pc.getGold()
+                + " gp left. `wield " + item + "` to equip it." + (bought < qty ? " (No room for the rest.)" : ""));
+    }
+
+    /** Buys up to {@code qty} of any other {@link GearCatalog}-priced item (assumed already validated as
+        recognized), gated by container room: an exempt item (see {@link ContainerRules#isExempt}) goes
+        straight into the on-person {@code inventory} list as always; everything else needs a container
+        with room (backpack, then a worn sack, then held sacks, via {@link ContainerRules#findRoomFor})
+        and stops (per unit) — gold untouched for the rest — once none fits or gold runs out. Mutates
+        {@code pc}; returns how many were actually bought (0 if none). Package-private: tests exercise
+        this directly without a {@link CommandContext}. */
+    int buyGear(SaveGame save, Character pc, String item, int qty) {
+        int price = GearCatalog.priceGp(item);
+        if (price < 0) {
+            return 0;
+        }
+        boolean exempt = ContainerRules.isExempt(item);
+        int weight = GearCatalog.weightCns(item);
+        int bought = 0;
+        for (int i = 0; i < qty && pc.getGold() >= price; i++) {
+            Container home = exempt ? null : ContainerRules.findRoomFor(pc.getContainers(), weight);
+            if (!exempt && home == null) {
+                break;
+            }
+            if (exempt) {
+                pc.getInventory().add(item);
+            } else {
+                home.getItems().add(item);
+            }
+            pc.setGold(pc.getGold() - price);
+            bought++;
+        }
+        return bought;
+    }
+
+    /** Package-private: tests exercise this directly without a {@link CommandContext}. */
+    ContainerType containerTypeFor(String lower) {
+        if (lower.contains("backpack")) {
+            return ContainerType.BACKPACK;
+        }
+        if (lower.contains("small") && lower.contains("sack")) {
+            return ContainerType.SMALL_SACK;
+        }
+        if (lower.contains("large") && lower.contains("sack")) {
+            return ContainerType.LARGE_SACK;
+        }
+        return null;
     }
 
     private void buyShield(CommandContext ctx, SaveGame save, Character pc, String prefix) {
@@ -191,9 +296,12 @@ public class BuyCommand extends Command {
     @Override
     public void provideHelp(HelpContext help) {
         help.addUsage("[pc-name] <item> [qty]");
-        help.addDescription("Buys supplies in town: a weapon or common gear (added to inventory — "
-                + "`wield` it to equip), armor (`leather`/`chain mail`/`plate mail`, worn immediately), "
-                + "`shield` (needs a free hand), or light supplies: torches (" + LightSource.TORCH.itemCostGp()
+        help.addDescription("Buys supplies in town: a weapon or common gear (stowed in the first "
+                + "container with room — `wield` a weapon to equip it; refused if nothing has space, "
+                + "buy a bigger sack), armor (`leather`/`chain mail`/`plate mail`, worn immediately), "
+                + "`shield` (needs a free hand), a `backpack`/`small sack`/`large sack` (a backpack and "
+                + "one small sack are worn for free; any more are held, costing a hand each, and dropped "
+                + "if a fight fills your hands), or light supplies: torches (" + LightSource.TORCH.itemCostGp()
                 + " gp each, disposable, 6 turns of light), a lantern (" + LightSource.LANTERN.itemCostGp()
                 + " gp, reusable), or oil flasks (" + LightSource.OIL_FLASK_COST_GP
                 + " gp each, a lantern's fuel, 24 turns per flask). In a multi-PC party, name a PC first "

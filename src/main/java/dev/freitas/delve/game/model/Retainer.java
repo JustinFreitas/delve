@@ -10,7 +10,10 @@ import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.CombatTables;
 import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Encumbrance;
+import dev.freitas.delve.game.engine.GearCatalog;
 import dev.freitas.delve.game.engine.WeaponCatalog;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A hired retainer (henchman) who adventures and fights alongside the player. Shares the combat and
@@ -43,6 +46,12 @@ public class Retainer implements Combatant, Advanceable {
     // SaveGame.ownerOf, which falls back to the primary PC for these).
     private String owner;
 
+    // No command grants a retainer gold or gear yet (hiring only sets armor/weapon via RetainerFactory)
+    // — these exist so the container/weight rules apply uniformly the moment one ever does, same as
+    // Character's exempt-items list and containers.
+    private List<String> inventory = new ArrayList<>();
+    private List<Container> containers = new ArrayList<>();
+
     public Retainer() {}
 
     @Override
@@ -50,15 +59,26 @@ public class Retainer implements Combatant, Advanceable {
         return armor.baseArmorClass() - (shield ? 1 : 0) - abilities.modifier(Ability.DEX);
     }
 
-    /** Total carried weight in cns: armor, shield, and both weapons — a retainer has no gold/inventory/
-        light supplies of its own today (see {@code SaveGame}'s ownership model), so unlike
-        {@code Character.carriedWeightCns()} this is just their equipped gear. */
+    /** Total carried weight in cns: armor, shield, both weapons, and any containers/exempt items this
+        retainer happens to have (nothing grants them any today — see {@code inventory}/{@code
+        containers}' own javadoc) — kept alongside {@link Character#carriedWeightCns()}'s fuller
+        formula so the rules apply identically if that ever changes. */
     @JsonIgnore
     public int carriedWeightCns() {
-        return armor.weightCns()
+        int weight = armor.weightCns()
                 + (shield ? Encumbrance.SHIELD_WEIGHT_CNS : 0)
                 + WeaponCatalog.weightCns(mainWeapon)
                 + (secondaryWeapon != null ? WeaponCatalog.weightCns(secondaryWeapon) : 0);
+        for (String item : inventory) {
+            weight += GearCatalog.weightCns(item);
+        }
+        for (Container container : containers) {
+            weight += container.getType().weightCns();
+            for (String item : container.getItems()) {
+                weight += GearCatalog.weightCns(item);
+            }
+        }
+        return weight;
     }
 
     @Override
@@ -221,5 +241,21 @@ public class Retainer implements Combatant, Advanceable {
 
     public void setOwner(String owner) {
         this.owner = owner;
+    }
+
+    public List<String> getInventory() {
+        return inventory;
+    }
+
+    public void setInventory(List<String> inventory) {
+        this.inventory = inventory;
+    }
+
+    public List<Container> getContainers() {
+        return containers;
+    }
+
+    public void setContainers(List<Container> containers) {
+        this.containers = containers;
     }
 }

@@ -1,6 +1,7 @@
 package dev.freitas.delve.command;
 
 import dev.freitas.delve.game.engine.Combatant;
+import dev.freitas.delve.game.engine.ContainerRules;
 import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Hands;
 import dev.freitas.delve.game.engine.MuleRules;
@@ -101,7 +102,9 @@ public final class PartySummary {
             secondary = pc.offHandDescription();
         }
         boolean shield = pc != null ? pc.isShield() : ((Retainer) who).isShield();
-        int handsFree = Hands.free(who.getMainWeapon(), shield, isBearer, offHandEquipped);
+        int heldSacks = pc != null ? ContainerRules.heldCount(pc.getContainers())
+                : ContainerRules.heldCount(((Retainer) who).getContainers());
+        int handsFree = Hands.free(who.getMainWeapon(), shield, isBearer, offHandEquipped, heldSacks);
         String bearing = isBearer && save.getSession().getActiveLight() != null
                 ? " (bearing " + save.getSession().getActiveLight().displayName() + ")" : "";
         return "rank " + rank + (engaged ? " (engaged)" : "") + ", " + glyph + secondary

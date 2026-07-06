@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
+import dev.freitas.delve.game.engine.ContainerType;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Encumbrance;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Container;
 import dev.freitas.delve.game.model.Retainer;
+import java.util.List;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 
@@ -108,6 +111,38 @@ class EncumbranceTest {
     }
 
     @Test
+    void carriedWeightIncludesContainersOwnWeightAndContents() {
+        Character c = bareCharacter();
+        c.setTorches(0);
+        c.setGold(0);
+        Container backpack = new Container(ContainerType.BACKPACK, false, c.getName()); // 20cn empty
+        backpack.getItems().add("Rope"); // 50
+        backpack.getItems().add("Tinderbox"); // 5
+        c.setContainers(List.of(backpack));
+
+        // Bare-fists default "Weapon" falls back to WeaponCatalog's 30cn default.
+        assertThat(c.carriedWeightCns()).isEqualTo(30 + 20 + 50 + 5);
+    }
+
+    @Test
+    void carriedWeightNoLongerCountsAContainerOnceRemovedFromTheList() {
+        // Mirrors what ContainerService does when a held container is dropped mid-combat: it's simply no
+        // longer in this list, so it stops counting -- no special-casing needed here.
+        Character c = bareCharacter();
+        c.setTorches(0);
+        c.setGold(0);
+        Container heldSack = new Container(ContainerType.SMALL_SACK, true, c.getName());
+        heldSack.getItems().add("Gems"); // unrecognized, contributes 0 -- weight comes from the sack itself
+        c.setContainers(new java.util.ArrayList<>(List.of(heldSack)));
+        int withSack = c.carriedWeightCns();
+
+        c.getContainers().clear();
+
+        assertThat(withSack).isEqualTo(30 + 1); // bare weapon (30) + small sack's own weight (1cn)
+        assertThat(c.carriedWeightCns()).isEqualTo(30);
+    }
+
+    @Test
     void aFreshFighterFromCharacterFactoryIsWellUnderCapButNotWeightless() {
         Character fighter = characterFactory.create("Conan", CharacterClass.FIGHTER,
                 new AbilityScores(15, 9, 9, 13, 12, 9));
@@ -140,6 +175,21 @@ class EncumbranceTest {
         r.setSecondaryWeapon(null);
 
         assertThat(r.carriedWeightCns()).isEqualTo(10);
+    }
+
+    @Test
+    void retainerCarriedWeightIncludesContainersLikeACharacterDoes() {
+        // Nothing grants a retainer a container yet, but the rule applies uniformly the moment one does.
+        Retainer r = retainerFactory.create("Bryn", CharacterClass.MAGIC_USER, 1, 9);
+        r.setArmor(Armor.NONE);
+        r.setShield(false);
+        r.setMainWeapon("Dagger"); // 10
+        r.setSecondaryWeapon(null);
+        Container sack = new Container(ContainerType.SMALL_SACK, false, r.getName()); // 1cn
+        sack.getItems().add("Tinderbox"); // 5
+        r.setContainers(List.of(sack));
+
+        assertThat(r.carriedWeightCns()).isEqualTo(10 + 1 + 5);
     }
 
     private Character bareCharacter() {

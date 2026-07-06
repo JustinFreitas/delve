@@ -66,4 +66,22 @@ class HandsTest {
         assertThat(Hands.used("Long bow", false, false, true)).isEqualTo(3);
         assertThat(Hands.fits("Long bow", false, false, true)).isFalse();
     }
+
+    @Test
+    void heldSacksAloneCostAHandEach() {
+        // 3-arg + int overload: no off-hand concept (retainer shape).
+        assertThat(Hands.used("Sword", false, false, 1)).isEqualTo(2);
+        assertThat(Hands.free("Sword", false, false, 1)).isEqualTo(0);
+        assertThat(Hands.fits("Sword", false, false, 1)).isTrue();
+        assertThat(Hands.fits("Sword", false, false, 2)).isFalse();
+    }
+
+    @Test
+    void heldSacksStackWithOffHandWeapon() {
+        // 5-arg overload: PC shape, off-hand weapon plus held sacks both count.
+        assertThat(Hands.used("Sword", false, false, true, 1)).isEqualTo(3);
+        assertThat(Hands.free("Sword", false, false, true, 1)).isEqualTo(0);
+        assertThat(Hands.fits("Sword", false, false, true, 0)).isTrue();
+        assertThat(Hands.fits("Sword", false, false, true, 1)).isFalse();
+    }
 }

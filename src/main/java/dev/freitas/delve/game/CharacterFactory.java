@@ -4,10 +4,14 @@ import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
+import dev.freitas.delve.game.engine.ContainerRules;
+import dev.freitas.delve.game.engine.ContainerType;
 import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.GearCatalog;
 import dev.freitas.delve.game.engine.Leveling;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Container;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -128,12 +132,27 @@ public class CharacterFactory {
         }
         // Common kit every delver carries (see Character.torches for the light supply, tracked as a
         // dedicated int rather than a flavor string here).
-        gear.add("Backpack");
         gear.add("Tinderbox");
         gear.add("Rations (1 week)");
         gear.add("Waterskin");
         gear.add("50' rope");
-        c.setInventory(gear);
+
+        // Every starting kit comes with a real worn backpack; non-exempt items are auto-assigned into it
+        // (or wherever else has room, following the same rule /buy uses). This curated grant is
+        // best-effort, not capacity-refused the way a purchase is — a couple of kits (Magic-User/Elf's
+        // 300cn spellbook plus the ~265cn common kit) run past a single 400cn backpack's limit, and that
+        // overflow is allowed here rather than denying character creation or inventing a second backpack
+        // nobody asked for.
+        Container backpack = new Container(ContainerType.BACKPACK, false, c.getName());
+        c.getContainers().add(backpack);
+        for (String item : gear) {
+            if (ContainerRules.isExempt(item)) {
+                c.getInventory().add(item);
+                continue;
+            }
+            Container home = ContainerRules.findRoomFor(c.getContainers(), GearCatalog.weightCns(item));
+            (home != null ? home : backpack).getItems().add(item);
+        }
     }
 
     private void setWeapon(Character c, String name, DamageRoll damage) {

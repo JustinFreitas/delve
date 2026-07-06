@@ -5,6 +5,7 @@ import dev.freitas.delve.game.engine.Encumbrance;
 import dev.freitas.delve.game.engine.SavingThrows;
 import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Container;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +60,11 @@ public final class PregenExport {
         root.put("lanterns", c.getLanterns());
         root.put("oilFlasks", c.getOilFlasks());
         root.put("healingPotions", c.getHealingPotions());
-        root.put("equipment", c.getInventory());
+        root.put("onPerson", c.getInventory());
+        List<Map<String, Object>> containers = c.getContainers().stream().map(PregenExport::containerOf).toList();
+        if (!containers.isEmpty()) {
+            root.put("containers", containers);
+        }
 
         List<String> prepared = c.getMemorizedSpells().stream()
                 .map(Spell::valueOf)
@@ -72,5 +77,13 @@ public final class PregenExport {
             root.put("spellbook", c.getSpellbook());
         }
         return root;
+    }
+
+    private static Map<String, Object> containerOf(Container container) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("type", container.getType().displayName());
+        m.put("held", container.isHeld());
+        m.put("items", container.getItems());
+        return m;
     }
 }

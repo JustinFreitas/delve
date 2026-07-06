@@ -102,6 +102,7 @@ public class WieldCommand extends Command {
                         WeaponCatalog.handsRequired(character.getMainWeapon()), character.isShield(), isBearer, true));
                 return;
             }
+            InventoryMatcher.remove(character, match);
             character.setOffHandWeapon(match);
             ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);
             ctx.reply(prefix + "You take up **" + match + "** in your off hand (+1 to attack while dual-wielding).");
@@ -118,6 +119,7 @@ public class WieldCommand extends Command {
                     character.isShield(), isBearer, offHandEquipped));
             return;
         }
+        InventoryMatcher.remove(character, match);
         character.setMainWeapon(match);
         character.setMainWeaponDamage(WeaponCatalog.damageFor(match));
         ctx.getBeans().gameState.save(ctx.getInvokerUserId(), save);

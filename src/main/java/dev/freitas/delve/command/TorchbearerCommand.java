@@ -3,6 +3,7 @@ package dev.freitas.delve.command;
 import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
+import dev.freitas.delve.game.engine.ContainerRules;
 import dev.freitas.delve.game.engine.Hands;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Retainer;
@@ -59,11 +60,12 @@ public class TorchbearerCommand extends Command {
         for (Character c : save.getCharacters()) {
             String label = solo ? c.getName() + " (you)" : c.getName();
             sb.append(String.format("%-16s %d/2 hands free%n", label,
-                    Hands.free(c.getMainWeapon(), c.isShield(), false, c.getOffHandWeapon() != null)));
+                    Hands.free(c.getMainWeapon(), c.isShield(), false, c.getOffHandWeapon() != null,
+                            ContainerRules.heldCount(c.getContainers()))));
         }
         for (Retainer r : save.livingRetainers()) {
             sb.append(String.format("%-16s %d/2 hands free%n", r.getName(),
-                    Hands.free(r.getMainWeapon(), r.isShield(), false)));
+                    Hands.free(r.getMainWeapon(), r.isShield(), false, ContainerRules.heldCount(r.getContainers()))));
         }
         return sb.append("```").toString();
     }

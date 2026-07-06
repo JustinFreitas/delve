@@ -80,10 +80,13 @@ class CharacterCreationTest {
         assertThat(fighter.armorClass()).isEqualTo(3);
         assertThat(fighter.ascendingArmorClass()).isEqualTo(16);
         // The equipped weapon (Sword) and torches live on dedicated fields (mainWeapon, torches), not
-        // duplicated into inventory -- inventory holds only what has no dedicated field.
+        // duplicated into inventory -- inventory holds only exempt items (see ContainerRules.isExempt);
+        // everything else, including the Dagger/Sling, is auto-stowed in the starting backpack instead.
         assertThat(fighter.getMainWeapon()).isEqualTo("Sword");
         assertThat(fighter.getTorches()).isEqualTo(6);
-        assertThat(fighter.getInventory()).contains("Dagger", "Sling & 30 stones").doesNotContain("Sword", "6 Torches");
+        assertThat(fighter.getInventory()).contains("Waterskin").doesNotContain("Sword", "6 Torches", "Dagger");
+        assertThat(fighter.getContainers()).hasSize(1);
+        assertThat(fighter.getContainers().get(0).getItems()).contains("Dagger", "Sling & 30 stones");
         assertThat(fighter.getGold()).isBetween(30, 180);
         assertThat(fighter.getSpellbook()).isEmpty();
     }

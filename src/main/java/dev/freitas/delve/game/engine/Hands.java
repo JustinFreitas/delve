@@ -36,4 +36,34 @@ public final class Hands {
     public static boolean fits(String weaponName, boolean shield, boolean holdingLight, boolean offHand) {
         return used(weaponName, shield, holdingLight, offHand) <= TOTAL;
     }
+
+    /** As the 3-arg version, but with {@code heldSacks} — the count of currently-held (not worn)
+        {@link dev.freitas.delve.game.model.Container}s, each costing one more hand, same as a shield or
+        the party's light. A worn backpack or worn small sack costs no hand and isn't counted here. For
+        retainers, which have no off-hand-weapon concept; see the 5-arg version for PCs. */
+    public static int used(String weaponName, boolean shield, boolean holdingLight, int heldSacks) {
+        return used(weaponName, shield, holdingLight) + heldSacks;
+    }
+
+    public static int free(String weaponName, boolean shield, boolean holdingLight, int heldSacks) {
+        return Math.max(0, TOTAL - used(weaponName, shield, holdingLight, heldSacks));
+    }
+
+    public static boolean fits(String weaponName, boolean shield, boolean holdingLight, int heldSacks) {
+        return used(weaponName, shield, holdingLight, heldSacks) <= TOTAL;
+    }
+
+    /** As the 4-arg off-hand version, but with {@code heldSacks} too — the full PC budget: weapon,
+        shield, light, off-hand weapon, and held (not worn) containers. */
+    public static int used(String weaponName, boolean shield, boolean holdingLight, boolean offHand, int heldSacks) {
+        return used(weaponName, shield, holdingLight, offHand) + heldSacks;
+    }
+
+    public static int free(String weaponName, boolean shield, boolean holdingLight, boolean offHand, int heldSacks) {
+        return Math.max(0, TOTAL - used(weaponName, shield, holdingLight, offHand, heldSacks));
+    }
+
+    public static boolean fits(String weaponName, boolean shield, boolean holdingLight, boolean offHand, int heldSacks) {
+        return used(weaponName, shield, holdingLight, offHand, heldSacks) <= TOTAL;
+    }
 }

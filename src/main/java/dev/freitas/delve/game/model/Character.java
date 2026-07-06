@@ -54,7 +54,11 @@ public class Character implements Combatant, Advanceable {
     /** Flasks of oil owned, a lantern's fuel (one flask per {@link dev.freitas.delve.game.engine.LightSource#turnsPerUse()}). */
     private int oilFlasks = 0;
 
+    // Items that never need a container (gygax75-rules' named exceptions -- see
+    // ContainerRules.isExempt): waterskin, holy symbol, one quiver/bolt case. Everything else lives in
+    // a Container's own item list instead.
     private List<String> inventory = new ArrayList<>();
+    private List<Container> containers = new ArrayList<>();
     private List<String> spellbook = new ArrayList<>();
     private List<String> memorizedSpells = new ArrayList<>();
     private int healingPotions = 0;
@@ -75,8 +79,11 @@ public class Character implements Combatant, Advanceable {
     }
 
     /** Total carried weight in cns (gygax75-rules, 1 coin = 1 cn): armor, shield, both weapons, light
-        supplies, healing potions, everything in {@code inventory} (by name via {@link GearCatalog}),
-        and gold — the input to {@link Encumbrance}'s movement-rate bands. */
+        supplies, healing potions, exempt {@code inventory} items (by name via {@link GearCatalog}),
+        gold, and every currently-carried {@link Container}'s own weight plus its contents. A container
+        dropped mid-combat (see {@code ContainerService}, {@code CombatEncounter#getDroppedContainers})
+        isn't in this list anymore, so it correctly stops counting the moment it's dropped — the input
+        to {@link Encumbrance}'s movement-rate bands. */
     @JsonIgnore
     public int carriedWeightCns() {
         int weight = armor.weightCns()
@@ -90,6 +97,12 @@ public class Character implements Combatant, Advanceable {
                 + gold * Encumbrance.COIN_WEIGHT_CNS;
         for (String item : inventory) {
             weight += GearCatalog.weightCns(item);
+        }
+        for (Container container : containers) {
+            weight += container.getType().weightCns();
+            for (String item : container.getItems()) {
+                weight += GearCatalog.weightCns(item);
+            }
         }
         return weight;
     }
@@ -274,6 +287,14 @@ public class Character implements Combatant, Advanceable {
 
     public void setInventory(List<String> inventory) {
         this.inventory = inventory;
+    }
+
+    public List<Container> getContainers() {
+        return containers;
+    }
+
+    public void setContainers(List<Container> containers) {
+        this.containers = containers;
     }
 
     public List<String> getSpellbook() {

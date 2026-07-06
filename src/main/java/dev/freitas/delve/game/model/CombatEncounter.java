@@ -23,6 +23,12 @@ public class CombatEncounter {
     private boolean monstersSurprised;
     private int distanceFeet;
 
+    // Held (not worn) containers dropped at combat start because their owner's hands are already
+    // full without them (see ContainerService.reconcileHeldContainers) — each still carries its own
+    // owner token, so this is a flat list rather than a per-owner map. Returned to the owner on
+    // victory, lost for good on a successful flee.
+    private List<Container> droppedContainers = new ArrayList<>();
+
     public CombatEncounter() {}
 
     @JsonIgnore
@@ -124,5 +130,13 @@ public class CombatEncounter {
 
     public void setDistanceFeet(int distanceFeet) {
         this.distanceFeet = Math.max(0, distanceFeet);
+    }
+
+    public List<Container> getDroppedContainers() {
+        return droppedContainers;
+    }
+
+    public void setDroppedContainers(List<Container> droppedContainers) {
+        this.droppedContainers = droppedContainers;
     }
 }

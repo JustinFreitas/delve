@@ -55,7 +55,7 @@ public class SpikeCommand extends DungeonCommand {
 
         ExplorationResult result = exploration.spike(save, direction, holdOpen);
         if (result.isSuccess()) {
-            pc.getInventory().remove(spike);
+            InventoryMatcher.remove(pc, spike);
         }
         persist(ctx, save);
         ctx.reply(result.text());

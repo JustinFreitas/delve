@@ -87,7 +87,7 @@ public class SellCommand extends Command {
             ctx.reply(prefix + "The trader can't appraise **" + match + "** — no sale.");
             return;
         }
-        sell(ctx, save, character, match, () -> character.getInventory().remove(match), prefix);
+        sell(ctx, save, character, match, () -> InventoryMatcher.remove(character, match), prefix);
     }
 
     private void sell(

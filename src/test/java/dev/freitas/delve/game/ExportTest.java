@@ -28,7 +28,7 @@ class ExportTest {
         assertThat(export.get("level")).isEqualTo(5);
         assertThat(export.get("thac0")).isEqualTo(f.thac0());
         assertThat(export.get("armorClass")).isEqualTo(f.armorClass());
-        assertThat(export).containsKeys("abilities", "savingThrows", "equipment", "gold", "hitPoints");
+        assertThat(export).containsKeys("abilities", "savingThrows", "onPerson", "containers", "gold", "hitPoints");
 
         @SuppressWarnings("unchecked")
         Map<String, Integer> abilities = (Map<String, Integer>) export.get("abilities");

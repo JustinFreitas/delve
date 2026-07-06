@@ -318,9 +318,9 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   plate mail 400→60gp, rations 15→1gp; delve-only names like short sword/halberd/pike and the compound
   ammo bundles have no gygax75 equivalent and are unchanged). Plate mail's price drop made it newly
   affordable at ordinary starting gold, so `Outfitter`'s armor tier list for Fighter/Dwarf/Cleric/Elf
-  gained it as the first (best-affordable) tier ahead of chain mail. Deliberately not modeled: container
-  capacity (backpack/sack capacity limits) and gygax75's hand-usage-for-sacks-in-combat rules — total
-  weight carried is tracked, not what's stowed in which named container.
+  gained it as the first (best-affordable) tier ahead of chain mail. Deliberately deferred to Milestone
+  21 below: container capacity (backpack/sack capacity limits) and gygax75's hand-usage-for-sacks-in-combat
+  rules — this milestone tracks total weight carried only, not what's stowed in which named container.
 - **Milestone 20** — web interface catches up to multi-PC parties and the mule: `GameFacade` predates
   both (it shipped before either existed), so every PC-targeted method (`character`, `cast`, `prepare`,
   `quaff`, `hire`, `dismiss`, `exportText`/`exportJson`) gains an optional `pcName`, resolved the same
@@ -339,8 +339,40 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   (`GameFacadeTest`, 14 cases): additive roll/pregen, pc-name resolution success/failure, `party()`
   parity with `PartySummary`, and the mule actions. The live OAuth browser flow itself isn't
   exercised here — no Discord OAuth app credentials exist in this environment to test it end-to-end.
+- **Milestone 21** — container capacity + hand-usage-for-sacks-in-combat: the two items Milestone 19
+  deliberately deferred. A new `ContainerType` enum (`BACKPACK`/`SMALL_SACK`/`LARGE_SACK`, each with a
+  gygax75 capacity and own weight) and `Container` model (a type, worn-or-held flag, owner token, and a
+  real per-item list — not just an aggregate number, so losing one loses exactly what was in it) replace
+  `Character`/`Retainer`'s flat `inventory` list for everything except gygax75's named on-person
+  exceptions (waterskin, holy symbol, one quiver/bolt case — `ContainerRules.isExempt`); `Retainer` gains
+  `inventory`/`containers` fields for the first time (nothing grants a retainer gear yet, but the rules
+  now apply uniformly the moment something does). `Hands` gained a `heldSacks` dimension (a held, not
+  worn, container costs a hand exactly like a shield) across two new overload shapes — a 5-arg one for
+  PCs (stacking with the existing off-hand slot) and a 4-arg one for retainers (who have no off-hand
+  concept) — but this is purely informational everywhere a wield/shield/light-bearer/mule-handler action
+  is *gated*: those checks stay exactly as they were pre-milestone, because a held sack is gygax75-rules'
+  lowest-priority claim on a combatant's two hands and yields rather than blocking. The real consequence
+  lives in a new `ContainerService`, wired into `CombatService` the same reconcile-pattern way
+  `LightingService`/`MuleService` already are: `startCombat` drops any held container that no longer
+  fits once weapon/shield/light/off-hand are already accounted for (moved to a new
+  `CombatEncounter.droppedContainers`, still tagged with its owner), `victory` hands everything dropped
+  back, and a successful `flee` loses it — and whatever was inside it — for good. `/buy` gained
+  `backpack`/`small sack`/`large sack` as purchasable items (worn for free if a slot of that type is
+  still open — at most one worn backpack and one worn small sack — else held if a hand is free, refused
+  otherwise) and every other `GearCatalog` item now needs an actual container with room
+  (`ContainerRules.findRoomFor`, auto-assigned: backpack, then a worn sack, then held sacks) unless it's
+  one of the exempt names — refused, gold untouched, if nothing fits ("buy a bigger sack"). `/sell`,
+  `/wield`, and `/spike` all go through `InventoryMatcher`'s extended cross-container find/remove instead
+  of the old flat-list-only version, so a recognized item is found (and removed from) wherever it's
+  actually stowed. `CharacterFactory`'s starting kit now creates a real worn `Container(BACKPACK)` and
+  auto-assigns the class kit into it (or wherever else has room); a couple of kits (Magic-User/Elf's
+  300cn spellbook plus the ~265cn common kit) run past a single 400cn backpack, and that overflow is
+  allowed for this curated grant rather than refused the way a purchase is. `/sheet`/`/export`/the web
+  JSON show each container by name ("Backpack: ...", "Held small sack: ...") instead of one flat
+  "Equipment" line (renamed "On person" for what's left in the exempt list); `PregenExport`'s JSON gained
+  a structured `containers` array alongside the renamed `onPerson` list.
 
-All milestones are complete (333 tests green).
+All milestones are complete (374 tests green).
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
   doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps
@@ -454,7 +486,7 @@ half-built:
 | `/pole [on\|off]` | Toggle probing ahead with a 10-foot pole (passive trap sense; AC risk if surprised). |
 | `/light [torch\|lantern]` | View the party's light status, or light a fresh torch/lantern (whole-party action, no `[pc-name]`). |
 | `/torchbearer [name]` | View or reassign who's carrying the party's lit torch/lantern. |
-| `/buy [pc-name] <item> [qty]` | Buy a weapon/armor/shield/gear or light supplies in town; name a PC first to spend their gold. |
+| `/buy [pc-name] <item> [qty]` | Buy a weapon/armor/shield/gear, a `backpack`/`small sack`/`large sack`, or light supplies in town — gear is stowed in the first container with room; name a PC first to spend their gold. |
 | `/sell [pc-name] <item>` | Sell a recognized inventory item (or worn armor/shield) back for gold, plus a haggle bonus; name a PC first. |
 | `/cast [pc-name] <spell> [target]` | Cast a prepared spell (combat or utility); name a PC first to have them cast. |
 | `/prepare [pc-name] <spell>` | Memorize a spell into a free slot — name a caster PC first in a multi-PC party. |

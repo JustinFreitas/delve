@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.Encumbrance;
 import dev.freitas.delve.game.engine.SavingThrows;
 import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.Container;
 import java.awt.Color;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.MessageEmbed;
@@ -54,7 +55,10 @@ public final class CharacterSheets {
         eb.addField("Supplies", supplies.toString(), false);
 
         if (!c.getInventory().isEmpty()) {
-            eb.addField("Equipment", String.join(", ", c.getInventory()), false);
+            eb.addField("On person", String.join(", ", c.getInventory()), false);
+        }
+        for (Container container : c.getContainers()) {
+            eb.addField(containerLabel(container), containerContents(container), false);
         }
         if (!c.getMemorizedSpells().isEmpty()) {
             eb.addField("Prepared spells", spellNames(c), true);
@@ -103,7 +107,10 @@ public final class CharacterSheets {
         }
         sb.append("\n");
         if (!c.getInventory().isEmpty()) {
-            sb.append("Equipment: ").append(String.join(", ", c.getInventory())).append("\n");
+            sb.append("On person: ").append(String.join(", ", c.getInventory())).append("\n");
+        }
+        for (Container container : c.getContainers()) {
+            sb.append(containerLabel(container)).append(": ").append(containerContents(container)).append("\n");
         }
         if (!c.getMemorizedSpells().isEmpty()) {
             sb.append("Prepared: ").append(spellNames(c)).append("\n");
@@ -112,6 +119,19 @@ public final class CharacterSheets {
             sb.append("Spellbook: ").append(String.join(", ", c.getSpellbook())).append("\n");
         }
         return sb.append("```").toString();
+    }
+
+    /** "Backpack" for a worn container, "Held small sack" for one occupying a hand — see {@link
+        dev.freitas.delve.game.engine.Hands}/{@code ContainerService} for why a held one might get
+        dropped mid-fight. */
+    private static String containerLabel(Container container) {
+        return container.isHeld()
+                ? "Held " + container.getType().displayName().toLowerCase()
+                : container.getType().displayName();
+    }
+
+    private static String containerContents(Container container) {
+        return container.getItems().isEmpty() ? "(empty)" : String.join(", ", container.getItems());
     }
 
     private static String spellNames(Character c) {
