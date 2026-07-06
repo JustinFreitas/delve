@@ -48,4 +48,27 @@ class WeaponCatalogTest {
         assertThat(WeaponCatalog.damageFor("Dagger").toString()).isEqualTo("1d4");
         assertThat(WeaponCatalog.damageFor("Unknown Thing").toString()).isEqualTo("1d6");
     }
+
+    // --- Weight (gygax75-rules: 1 coin = 1 cn) ---------------------------------
+
+    @Test
+    void weighsRecognizedWeapons() {
+        assertThat(WeaponCatalog.weightCns("Dagger")).isEqualTo(10);
+        assertThat(WeaponCatalog.weightCns("Sword")).isEqualTo(60);
+        assertThat(WeaponCatalog.weightCns("Battle axe")).isEqualTo(30);
+        assertThat(WeaponCatalog.weightCns("Lance")).isEqualTo(120);
+    }
+
+    @Test
+    void halberdAndPikeMapToPolearmsWeight() {
+        assertThat(WeaponCatalog.weightCns("Halberd")).isEqualTo(150);
+        assertThat(WeaponCatalog.weightCns("Pike")).isEqualTo(150);
+        assertThat(WeaponCatalog.weightCns("Polearm")).isEqualTo(150);
+    }
+
+    @Test
+    void unmatchedWeaponsFallBackToARepresentativeDefaultWeight() {
+        assertThat(WeaponCatalog.weightCns("Unknown Thing")).isEqualTo(30);
+        assertThat(WeaponCatalog.weightCns(null)).isEqualTo(30);
+    }
 }

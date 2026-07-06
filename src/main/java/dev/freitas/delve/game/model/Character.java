@@ -9,6 +9,9 @@ import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.CombatTables;
 import dev.freitas.delve.game.engine.DamageRoll;
+import dev.freitas.delve.game.engine.Encumbrance;
+import dev.freitas.delve.game.engine.GearCatalog;
+import dev.freitas.delve.game.engine.WeaponCatalog;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -69,6 +72,26 @@ public class Character implements Combatant, Advanceable {
     /** Ascending AC equivalent (AC asc = 19 - AC desc), shown on the sheet for readability. */
     public int ascendingArmorClass() {
         return 19 - armorClass();
+    }
+
+    /** Total carried weight in cns (gygax75-rules, 1 coin = 1 cn): armor, shield, both weapons, light
+        supplies, healing potions, everything in {@code inventory} (by name via {@link GearCatalog}),
+        and gold — the input to {@link Encumbrance}'s movement-rate bands. */
+    @JsonIgnore
+    public int carriedWeightCns() {
+        int weight = armor.weightCns()
+                + (shield ? Encumbrance.SHIELD_WEIGHT_CNS : 0)
+                + WeaponCatalog.weightCns(mainWeapon)
+                + (offHandWeapon != null ? WeaponCatalog.weightCns(offHandWeapon) : 0)
+                + torches * Encumbrance.TORCH_WEIGHT_CNS
+                + lanterns * Encumbrance.LANTERN_WEIGHT_CNS
+                + oilFlasks * Encumbrance.OIL_FLASK_WEIGHT_CNS
+                + healingPotions * Encumbrance.POTION_WEIGHT_CNS
+                + gold * Encumbrance.COIN_WEIGHT_CNS;
+        for (String item : inventory) {
+            weight += GearCatalog.weightCns(item);
+        }
+        return weight;
     }
 
     /** To-hit-AC-0 number, from the B/X "attacks as" progression for this class and level. */

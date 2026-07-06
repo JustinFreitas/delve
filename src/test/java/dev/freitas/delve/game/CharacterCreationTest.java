@@ -79,7 +79,11 @@ class CharacterCreationTest {
         // Chain (5) - shield (1) - DEX mod (1) = 3 descending; ascending 16.
         assertThat(fighter.armorClass()).isEqualTo(3);
         assertThat(fighter.ascendingArmorClass()).isEqualTo(16);
-        assertThat(fighter.getInventory()).contains("Sword", "6 Torches");
+        // The equipped weapon (Sword) and torches live on dedicated fields (mainWeapon, torches), not
+        // duplicated into inventory -- inventory holds only what has no dedicated field.
+        assertThat(fighter.getMainWeapon()).isEqualTo("Sword");
+        assertThat(fighter.getTorches()).isEqualTo(6);
+        assertThat(fighter.getInventory()).contains("Dagger", "Sling & 30 stones").doesNotContain("Sword", "6 Torches");
         assertThat(fighter.getGold()).isBetween(30, 180);
         assertThat(fighter.getSpellbook()).isEmpty();
     }

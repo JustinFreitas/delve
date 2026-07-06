@@ -12,8 +12,9 @@ import java.util.List;
 
 /**
  * Best-effort auto-gear for a freshly-rolled PC: spends as much of {@link Character#getGold()} as it
- * can afford on a class-appropriate weapon, armor, and shield — degrading tier-by-tier (chain mail ->
- * leather -> none) rather than buying nothing — plus a few torches for light. Prices come from
+ * can afford on a class-appropriate weapon, armor, and shield — degrading tier-by-tier (plate mail ->
+ * chain mail -> leather -> none, for the classes that can wear heavy armor) rather than buying nothing
+ * — plus a few torches for light. Prices come from
  * {@link GearCatalog}, the same price list {@code /buy} uses, so this is a real gold purchase against a
  * bare character (contrast {@link CharacterFactory#create}'s free kit). Common flavor gear (rope,
  * rations, a backpack, etc.) is left out since it has no mechanical effect — a player who wants it can
@@ -31,14 +32,19 @@ public final class Outfitter {
     /** Torches aimed for — matches the free starting kit's count. */
     private static final int TORCH_TARGET = 6;
 
+    // Fighter/Dwarf/Cleric/Elf try the best-protection tier they can afford, most-protective first.
+    // Plate mail dropped from 400gp to 60gp when GearCatalog's prices were reconciled to gygax75-rules
+    // (was previously unreachable at typical 30-180gp starting gold, hence not offered at all before).
+    private static final List<Armor> HEAVY_ARMOR_TIERS = List.of(Armor.PLATE_MAIL, Armor.CHAIN_MAIL, Armor.LEATHER);
+
     private static Kit kitFor(CharacterClass characterClass) {
         return switch (characterClass) {
-            case FIGHTER -> new Kit("Sword", new DamageRoll(1, 8), List.of(Armor.CHAIN_MAIL, Armor.LEATHER), true);
-            case DWARF -> new Kit("Battle axe", new DamageRoll(1, 8), List.of(Armor.CHAIN_MAIL, Armor.LEATHER), true);
-            case CLERIC -> new Kit("Mace", new DamageRoll(1, 6), List.of(Armor.CHAIN_MAIL, Armor.LEATHER), true);
+            case FIGHTER -> new Kit("Sword", new DamageRoll(1, 8), HEAVY_ARMOR_TIERS, true);
+            case DWARF -> new Kit("Battle axe", new DamageRoll(1, 8), HEAVY_ARMOR_TIERS, true);
+            case CLERIC -> new Kit("Mace", new DamageRoll(1, 6), HEAVY_ARMOR_TIERS, true);
             case MAGIC_USER -> new Kit("Dagger", DAGGER_DAMAGE, List.of(), false);
             case THIEF -> new Kit("Sword", new DamageRoll(1, 8), List.of(Armor.LEATHER), false);
-            case ELF -> new Kit("Sword", new DamageRoll(1, 8), List.of(Armor.CHAIN_MAIL, Armor.LEATHER), false);
+            case ELF -> new Kit("Sword", new DamageRoll(1, 8), HEAVY_ARMOR_TIERS, false);
             case HALFLING -> new Kit("Short sword", new DamageRoll(1, 6), List.of(Armor.LEATHER), false);
         };
     }

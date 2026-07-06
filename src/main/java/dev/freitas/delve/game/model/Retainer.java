@@ -9,6 +9,8 @@ import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.CombatTables;
 import dev.freitas.delve.game.engine.DamageRoll;
+import dev.freitas.delve.game.engine.Encumbrance;
+import dev.freitas.delve.game.engine.WeaponCatalog;
 
 /**
  * A hired retainer (henchman) who adventures and fights alongside the player. Shares the combat and
@@ -46,6 +48,17 @@ public class Retainer implements Combatant, Advanceable {
     @Override
     public int armorClass() {
         return armor.baseArmorClass() - (shield ? 1 : 0) - abilities.modifier(Ability.DEX);
+    }
+
+    /** Total carried weight in cns: armor, shield, and both weapons — a retainer has no gold/inventory/
+        light supplies of its own today (see {@code SaveGame}'s ownership model), so unlike
+        {@code Character.carriedWeightCns()} this is just their equipped gear. */
+    @JsonIgnore
+    public int carriedWeightCns() {
+        return armor.weightCns()
+                + (shield ? Encumbrance.SHIELD_WEIGHT_CNS : 0)
+                + WeaponCatalog.weightCns(mainWeapon)
+                + (secondaryWeapon != null ? WeaponCatalog.weightCns(secondaryWeapon) : 0);
     }
 
     @Override

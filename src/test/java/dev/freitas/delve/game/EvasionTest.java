@@ -28,22 +28,24 @@ class EvasionTest {
 
     @Test
     void fasterPartyAlwaysEscapes() {
-        // Unarmored (encounter rate 40) vs. a Skeleton (moveRate 60 -> encounter rate 20): always faster.
+        // Weight 10 cns (bare, dagger only -> movement rate 120, encounter rate 40) vs. a Skeleton
+        // (moveRate 60 -> encounter rate 20): always faster.
         for (int seed = 0; seed < 40; seed++) {
-            SaveGame save = fleeAttempt(seed, Armor.NONE, Bestiary.SKELETON);
+            SaveGame save = fleeAttempt(seed, 10, Bestiary.SKELETON);
             assertThat(save.getSession().getState()).isEqualTo(SessionState.EXPLORING);
         }
     }
 
     @Test
     void slowerPartyOnlySometimesEscapes() {
-        // Plate mail (encounter rate 10) vs. a Giant Rat (moveRate 120 -> encounter rate 40): never
-        // faster, so only the flat 2-in-6 pursuit-check escape applies.
+        // Weight 510 cns (plate mail alone -> movement rate 90, encounter rate 30) vs. a Giant Rat
+        // (moveRate 120 -> encounter rate 40): never faster, so only the flat 2-in-6 pursuit-check
+        // escape applies.
         int escaped = 0;
         int caught = 0;
         int trials = 100;
         for (int seed = 0; seed < trials; seed++) {
-            SaveGame save = fleeAttempt(seed, Armor.PLATE_MAIL, Bestiary.GIANT_RAT);
+            SaveGame save = fleeAttempt(seed, 510, Bestiary.GIANT_RAT);
             if (save.getSession().getState() == SessionState.EXPLORING) {
                 escaped++;
             } else {
@@ -56,12 +58,22 @@ class EvasionTest {
         assertThat(escaped).isLessThan(trials / 2); // well below the "faster" case's near-100%
     }
 
-    private SaveGame fleeAttempt(long seed, Armor armor, MonsterType monster) {
+    /** Builds a bare, precisely-weighted PC (armor NONE, no shield/inventory/gold, a single dagger as
+        mainWeapon) then bumps gold up to land exactly on the requested total {@code carriedWeightCns()}
+        -- isolating the evasion math from {@code CharacterFactory}'s starting-kit weight/random gold,
+        which would otherwise make the exact encounter-rate band this test depends on nondeterministic. */
+    private SaveGame fleeAttempt(long seed, int carriedWeightCns, MonsterType monster) {
         Dice dice = new Dice(new Random(seed));
         CombatService combat = new CombatService(dice, new SpellService(dice));
-        Character hero = new CharacterFactory(dice)
-                .create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
-        hero.setArmor(armor);
+        Character hero = new Character();
+        hero.setName("Hero");
+        hero.setCharacterClass(CharacterClass.FIGHTER);
+        hero.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 9));
+        hero.setArmor(carriedWeightCns >= 500 ? Armor.PLATE_MAIL : Armor.NONE);
+        hero.setShield(false);
+        hero.setMainWeapon("Dagger"); // 10 cns
+        hero.setTorches(0);
+        hero.setGold(carriedWeightCns - hero.carriedWeightCns());
         hero.setMaxHp(200);
         hero.setCurrentHp(200);
         SaveGame save = combatSave(hero, monster, 1);

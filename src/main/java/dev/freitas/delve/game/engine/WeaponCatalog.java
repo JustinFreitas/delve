@@ -50,6 +50,35 @@ public final class WeaponCatalog {
             new DamageEntry("sword", new DamageRoll(1, 8)));
     private static final DamageRoll DEFAULT_DAMAGE = new DamageRoll(1, 6);
 
+    private record WeightEntry(String needle, int weightCns) {}
+
+    // Weight in cns (gygax75-rules, 1 coin = 1 cn), most-specific-first. Covers every weapon name
+    // CharacterFactory/RetainerFactory grant or GearCatalog/{@code /buy} recognize -- a superset of
+    // WeaponCatalog's own classify/damage needles, since plain melee weapons (sword, mace, dagger...)
+    // need no special classification but still need a weight. Halberd/pike have no gygax75 entry;
+    // mapped to Polearm's weight since WeaponCatalog already classifies them the same way (REACH).
+    private static final List<WeightEntry> WEIGHT_ENTRIES = List.of(
+            new WeightEntry("short sword", 40),
+            new WeightEntry("battle axe", 30),
+            new WeightEntry("dagger", 10),
+            new WeightEntry("sword", 60),
+            new WeightEntry("mace", 30),
+            new WeightEntry("halberd", 150),
+            new WeightEntry("pike", 150),
+            new WeightEntry("polearm", 150),
+            new WeightEntry("lance", 120),
+            new WeightEntry("javelin", 20),
+            new WeightEntry("spear", 30),
+            new WeightEntry("sling", 20),
+            new WeightEntry("short bow", 30),
+            new WeightEntry("long bow", 30),
+            new WeightEntry("light crossbow", 50),
+            new WeightEntry("crossbow", 50));
+
+    // A real weapon always weighs something -- unmatched names fall back to a representative average
+    // rather than 0, same spirit as DEFAULT_DAMAGE's 1d6 fallback.
+    private static final int DEFAULT_WEIGHT_CNS = 30;
+
     private WeaponCatalog() {}
 
     /** Classifies a weapon name; unrecognized/blank names default to {@code MELEE}. */
@@ -92,5 +121,19 @@ public final class WeaponCatalog {
             }
         }
         return DEFAULT_DAMAGE;
+    }
+
+    /** Weight in cns for a recognized weapon name (used by {@code Character}/{@code Retainer}'s
+        encumbrance); unmatched names default to {@link #DEFAULT_WEIGHT_CNS}. */
+    public static int weightCns(String weaponName) {
+        if (weaponName != null) {
+            String lower = weaponName.toLowerCase(Locale.ROOT);
+            for (WeightEntry entry : WEIGHT_ENTRIES) {
+                if (lower.contains(entry.needle())) {
+                    return entry.weightCns();
+                }
+            }
+        }
+        return DEFAULT_WEIGHT_CNS;
     }
 }

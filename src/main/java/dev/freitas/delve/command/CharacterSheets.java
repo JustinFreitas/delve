@@ -33,10 +33,11 @@ public final class CharacterSheets {
         eb.addField("Gold", c.getGold() + " gp", true);
         String armorLine = c.getArmor().displayName() + (c.isShield() ? " + shield" : "");
         eb.addField("Worn", armorLine, true);
-        boolean heavy = Encumbrance.heavyLoad(c.getGold());
+        int weight = c.carriedWeightCns();
         eb.addField("Movement",
-                Encumbrance.movementRate(c.getArmor(), heavy) + "'/turn (" + Encumbrance.descriptor(c.getArmor(), heavy) + ")",
+                Encumbrance.movementRate(weight) + "'/turn (" + Encumbrance.descriptor(weight) + ")",
                 true);
+        eb.addField("Carried", weight + "/" + Encumbrance.MAX_CARRY_CNS + " cns", true);
 
         StringBuilder supplies = new StringBuilder();
         supplies.append("Weapon: ").append(c.getMainWeapon()).append(" (").append(c.getMainWeaponDamage()).append(")");
@@ -68,7 +69,7 @@ public final class CharacterSheets {
     public static String textBlock(Character c) {
         AbilityScores a = c.getAbilities();
         SavingThrows.Saves s = SavingThrows.forCharacter(c.getCharacterClass(), c.getLevel());
-        boolean heavy = Encumbrance.heavyLoad(c.getGold());
+        int weight = c.carriedWeightCns();
         StringBuilder sb = new StringBuilder("```\n");
         sb.append(c.getName()).append(" — Level ").append(c.getLevel()).append(" ")
                 .append(c.getCharacterClass().displayName()).append("\n");
@@ -90,7 +91,8 @@ public final class CharacterSheets {
         }
         sb.append("\n");
         sb.append("Armor: ").append(c.getArmor().displayName()).append(c.isShield() ? " + shield" : "")
-                .append("   Move ").append(Encumbrance.movementRate(c.getArmor(), heavy)).append("'/turn\n");
+                .append("   Move ").append(Encumbrance.movementRate(weight)).append("'/turn")
+                .append("   Carried ").append(weight).append("/").append(Encumbrance.MAX_CARRY_CNS).append(" cns\n");
         sb.append("Delves: ").append(c.getDelveCount()).append("\n");
         sb.append("Gold: ").append(c.getGold()).append(" gp   Torches: ").append(c.getTorches());
         if (c.getLanterns() > 0 || c.getOilFlasks() > 0) {

@@ -294,9 +294,33 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   size check, and costs its owner a flat weekly stabling fee in town (`TownService`, same idiom as
   retainer upkeep, no desertion equivalent since a mule has no loyalty to lose). `/dismiss <name>`
   releases it same as a retainer.
+- **Milestone 19** — true coin-weight encumbrance: the armor-tier + flat-gold-threshold `Encumbrance`
+  model is replaced wholesale with gygax75-rules' real system (1 coin = 1 cn, 10 cn = 1 lb). Every
+  armor tier (`Armor.weightCns()`), weapon (`WeaponCatalog.weightCns`), and `GearCatalog` item now has a
+  weight; `Character.carriedWeightCns()`/`Retainer.carriedWeightCns()` sum armor + shield + weapon(s) +
+  light supplies + potions + inventory + gold (retainers have no gold/inventory/light supplies of their
+  own, so theirs is armor + weapon(s) only) into one total that alone picks movement rate off the four
+  gygax75 bands (120'/90'/60'/30' at 400/800/1200/2400 cns) — not armor tier the way it worked before.
+  Past the hard 2400-cn cap, movement rate is 0 ("cannot move"); `CombatService`'s existing
+  slowest-member group-rate and flee-evasion logic needed no changes to handle that gracefully (a 0-rate
+  member just always fails the "faster than the pursuer" check and falls through to the flat 2-in-6).
+  `/move` itself stays ungated by movement rate, same as before this milestone — exploration already
+  treats it as one room per command regardless of speed, so "cannot move" surfaces through combat/flee
+  and the sheet's overload warning, not a hard block on stepping through the dungeon.
+  `/sheet`/`/export`/the web JSON now show real carried weight (`X/2400 cns`) alongside the resulting
+  rate. Getting real weights meant fixing two things first: `CharacterFactory`'s starting kit was
+  double-listing the equipped weapon and torches into `inventory` on top of their own dedicated fields
+  (`mainWeapon`, `torches`) — removed, since `/sheet` already renders those from the dedicated fields
+  separately — and several `GearCatalog` prices were reconciled to gygax75-rules' own economy table
+  where a clean name match exists (dagger 3→4gp, lance 4→5gp, short bow 25→7gp, chain mail 60→40gp,
+  plate mail 400→60gp, rations 15→1gp; delve-only names like short sword/halberd/pike and the compound
+  ammo bundles have no gygax75 equivalent and are unchanged). Plate mail's price drop made it newly
+  affordable at ordinary starting gold, so `Outfitter`'s armor tier list for Fighter/Dwarf/Cleric/Elf
+  gained it as the first (best-affordable) tier ahead of chain mail. Deliberately not modeled: container
+  capacity (backpack/sack capacity limits) and gygax75's hand-usage-for-sacks-in-combat rules — total
+  weight carried is tracked, not what's stowed in which named container.
 
-All milestones are complete (303 tests green). See `../../.claude/plans/would-it-be-possible-wise-lantern.md`
-for the roadmap.
+All milestones are complete (319 tests green).
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
   doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps
@@ -335,13 +359,9 @@ half-build it:
   healing potions.
 - **Classes**: the custom demihuman classes (Barbarian, Druid, Knight, Warden, Gnome, Half-Orc, Wood
   Elf), expertise-point thief skills beyond Remove Traps (needs lockpicking/stealth subsystems that
-  don't exist), alignment/languages (no mechanical hook to attach them to), true coin-weight
-  encumbrance (would replace the existing tested `Encumbrance` model wholesale, folding in item weight
-  for gear too, not just gold, and its own movement-rate tiers instead of the current armor-based ones —
-  Milestone 18 above only carved out a narrow slice of it, a hard 2400gp cap gating mule-cargo recovery
-  specifically, deliberately not the full rewrite; the mule's own capacity won't need rework when this
-  lands either way, since gygax75-rules already defines 1 coin = 1 cn, the same unit its gold-count
-  capacity uses today), and the one-level-per-session XP cap / alternate reroll-all-HD leveling method.
+  don't exist), alignment/languages (no mechanical hook to attach them to), and the one-level-per-session
+  XP cap / alternate reroll-all-HD leveling method. (True coin-weight encumbrance, previously listed
+  here, shipped in Milestone 19.)
 
 ### Multi-PC party support (Phase 1)
 

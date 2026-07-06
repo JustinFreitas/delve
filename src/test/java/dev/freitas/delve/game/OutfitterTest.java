@@ -21,18 +21,20 @@ class OutfitterTest {
         String summary = Outfitter.outfit(fighter);
 
         assertThat(fighter.getMainWeapon()).isEqualTo("Sword");
-        assertThat(fighter.getArmor()).isEqualTo(Armor.CHAIN_MAIL);
+        // Plate mail is the first tier tried now (60gp after the gygax75 price reconciliation, easily
+        // affordable here) -- chain mail is only a fallback for when plate isn't affordable.
+        assertThat(fighter.getArmor()).isEqualTo(Armor.PLATE_MAIL);
         assertThat(fighter.isShield()).isTrue();
         assertThat(fighter.getTorches()).isEqualTo(6);
-        assertThat(fighter.getGold()).isEqualTo(200 - 10 - 60 - 10 - 6); // sword + chain mail + shield + torches
+        assertThat(fighter.getGold()).isEqualTo(200 - 10 - 60 - 10 - 6); // sword + plate mail + shield + torches
         assertThat(summary).contains("outfitted with");
     }
 
     @Test
     void aPoorFighterDowngradesArmorInsteadOfGoingWithoutAWeapon() {
-        // 15 gp: sword (10) leaves 5 -- too little for chain mail (60) or even leather (20), or a
-        // shield (10); the rest goes to torches. Still ends up armed, which is the point of "best
-        // effort" over an all-or-nothing shopping list.
+        // 15 gp: sword (10) leaves 5 -- too little for plate (60), chain mail (40), or even leather
+        // (20), or a shield (10); the rest goes to torches. Still ends up armed, which is the point of
+        // "best effort" over an all-or-nothing shopping list.
         Character fighter = bareCharacter(CharacterClass.FIGHTER, 15);
 
         Outfitter.outfit(fighter);

@@ -51,8 +51,9 @@ public final class PregenExport {
         }
         root.put("armor", c.getArmor().displayName());
         root.put("shield", c.isShield());
-        boolean heavy = Encumbrance.heavyLoad(c.getGold());
-        root.put("movementRate", Encumbrance.movementRate(c.getArmor(), heavy));
+        int weight = c.carriedWeightCns();
+        root.put("carriedWeightCns", weight);
+        root.put("movementRate", Encumbrance.movementRate(weight));
         root.put("gold", c.getGold());
         root.put("torches", c.getTorches());
         root.put("lanterns", c.getLanterns());

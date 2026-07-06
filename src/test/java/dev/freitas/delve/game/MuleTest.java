@@ -269,12 +269,21 @@ class MuleTest {
         assertThat(escapedWithOverloadedMule).isLessThan(trials); // no longer guaranteed
     }
 
+    // A precisely-weighted bare PC (10 cns: a dagger only, no armor/shield/gold/inventory) rather than
+    // CharacterFactory's full starting kit + random gold -- that kit alone can reach ~800+ cns (shield
+    // + sword + torches + gear + up to 180gp), which would make the "always faster than a Skeleton"
+    // assumption below nondeterministic across seeds instead of a guaranteed 120'/turn.
     private boolean fleeOutcome(long seed, boolean overloadedMule) {
         Dice localDice = new Dice(new Random(seed));
         CombatService combat = new CombatService(localDice, new SpellService(localDice));
-        Character hero = new CharacterFactory(localDice)
-                .create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
+        Character hero = new Character();
+        hero.setName("Hero");
+        hero.setCharacterClass(CharacterClass.FIGHTER);
+        hero.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 9));
         hero.setArmor(Armor.NONE);
+        hero.setShield(false);
+        hero.setMainWeapon("Dagger");
+        hero.setTorches(0);
         hero.setMaxHp(200);
         hero.setCurrentHp(200);
         SaveGame save = new SaveGame();

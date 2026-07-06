@@ -584,9 +584,10 @@ public class CombatService {
     }
 
     /** A fallen mule's cargo spills where it drops — every living PC in turn scoops up as much as their
-        own remaining carry capacity allows ({@link Encumbrance#capacityRemaining}, gygax75-rules' hard
-        2400gp load limit), so a party already loaded down may not recover all of it (or any of it).
-        Whatever nobody has room for is left behind with the corpse. Each PC is credited XP for their own
+        own remaining carry capacity allows ({@link Encumbrance#capacityRemaining} against their real
+        total {@link Character#carriedWeightCns() carried weight} — gear and gold both count now, not
+        just gold), so a party already loaded down may not recover all of it (or any of it). Whatever
+        nobody has room for is left behind with the corpse. Each PC is credited XP for their own
         recovered share, same 1-XP-per-gp rate as ordinary dungeon treasure; retainers hold no gold of
         their own (see {@code Retainer}) so don't share in this one, unlike a full room haul.
         Package-private: tests exercise this directly without needing to engineer a mule's death. */
@@ -601,7 +602,7 @@ public class CombatService {
             if (remaining == 0) {
                 break;
             }
-            int share = Math.min(remaining, Encumbrance.capacityRemaining(pc.getGold()));
+            int share = Math.min(remaining, Encumbrance.capacityRemaining(pc.carriedWeightCns()));
             if (share == 0) {
                 continue;
             }
@@ -860,11 +861,10 @@ public class CombatService {
     private int groupEncounterRate(SaveGame save) {
         int slowest = Integer.MAX_VALUE;
         for (Character c : save.livingCharacters()) {
-            slowest = Math.min(slowest, Encumbrance.encounterRate(c.getArmor(), Encumbrance.heavyLoad(c.getGold())));
+            slowest = Math.min(slowest, Encumbrance.encounterRate(c.carriedWeightCns()));
         }
         for (Retainer r : save.livingRetainers()) {
-            // Retainers don't track personal gold/heavy-load (see RetainerFactory) — never treated as heavy.
-            slowest = Math.min(slowest, Encumbrance.encounterRate(r.getArmor(), false));
+            slowest = Math.min(slowest, Encumbrance.encounterRate(r.carriedWeightCns()));
         }
         for (Mule mule : save.livingMules()) {
             slowest = Math.min(slowest, MuleRules.encounterRate(mule.getCarriedGold()));

@@ -3,10 +3,8 @@ package dev.freitas.delve.game;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.freitas.delve.game.engine.AbilityScores;
-import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
-import dev.freitas.delve.game.engine.Encumbrance;
 import dev.freitas.delve.game.engine.GameClock;
 import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.engine.SpellTables;
@@ -106,18 +104,6 @@ class SpellTownTest {
         var result = spells.castOutOfCombat(mu, Spell.MAGIC_MISSILE);
         assertThat(result.isSuccess()).isFalse();
         assertThat(spells.isMemorized(mu, Spell.MAGIC_MISSILE)).isTrue(); // not consumed on failure
-    }
-
-    // --- Encumbrance -------------------------------------------------------
-
-    @Test
-    void encumbranceTracksArmorAndLoad() {
-        assertThat(Encumbrance.movementRate(Armor.NONE, false)).isEqualTo(120);
-        assertThat(Encumbrance.movementRate(Armor.PLATE_MAIL, false)).isEqualTo(30);
-        assertThat(Encumbrance.movementRate(Armor.LEATHER, true)).isEqualTo(60); // heavy load slows a step
-        assertThat(Encumbrance.encounterRate(Armor.NONE, false)).isEqualTo(40);
-        assertThat(Encumbrance.heavyLoad(1000)).isTrue();
-        assertThat(Encumbrance.heavyLoad(100)).isFalse();
     }
 
     // --- Town --------------------------------------------------------------

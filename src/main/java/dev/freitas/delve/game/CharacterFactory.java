@@ -91,7 +91,6 @@ public class CharacterFactory {
                 c.setShield(true);
                 String weapon = characterClass == CharacterClass.DWARF ? "Battle axe" : "Sword";
                 setWeapon(c, weapon, new DamageRoll(1, 8));
-                gear.add(weapon);
                 gear.add("Dagger");
                 gear.add("Sling & 30 stones"); // cheap, one-handed missile backup
             }
@@ -99,21 +98,18 @@ public class CharacterFactory {
                 c.setArmor(Armor.CHAIN_MAIL);
                 c.setShield(true);
                 setWeapon(c, "Mace", new DamageRoll(1, 6)); // clerics use blunt weapons only
-                gear.add("Mace");
                 gear.add("Holy symbol (wooden)");
                 gear.add("Sling & 30 stones"); // blunt, fits the no-edged-weapons tradition
             }
             case MAGIC_USER -> {
                 c.setArmor(Armor.NONE);
                 setWeapon(c, "Dagger", new DamageRoll(1, 4));
-                gear.add("Dagger");
                 gear.add("Spellbook");
                 // No missile weapon: B/X restricts magic-users to the dagger alone.
             }
             case THIEF -> {
                 c.setArmor(Armor.LEATHER);
                 setWeapon(c, "Sword", new DamageRoll(1, 8));
-                gear.add("Sword");
                 gear.add("Dagger");
                 gear.add("Thieves' tools");
                 gear.add("Sling & 30 stones");
@@ -121,20 +117,18 @@ public class CharacterFactory {
             case ELF -> {
                 c.setArmor(Armor.CHAIN_MAIL);
                 setWeapon(c, "Sword", new DamageRoll(1, 8));
-                gear.add("Sword");
                 gear.add("Short bow & 20 arrows");
                 gear.add("Spellbook");
             }
             case HALFLING -> {
                 c.setArmor(Armor.LEATHER);
                 setWeapon(c, "Short sword", new DamageRoll(1, 6));
-                gear.add("Short sword");
                 gear.add("Sling & 30 stones");
             }
         }
-        // Common kit every delver carries (see Character.torches for the light supply).
+        // Common kit every delver carries (see Character.torches for the light supply, tracked as a
+        // dedicated int rather than a flavor string here).
         gear.add("Backpack");
-        gear.add("6 Torches");
         gear.add("Tinderbox");
         gear.add("Rations (1 week)");
         gear.add("Waterskin");
