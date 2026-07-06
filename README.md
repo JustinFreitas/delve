@@ -410,11 +410,12 @@ half-build it:
 - **Economy**: Inn-tier resting costs and generosity-tier hiring, treasure storage, magical research,
   rune transferring — the last three have nothing to act on since delve has no magic-item system beyond
   healing potions.
-- **Classes**: the custom demihuman classes (Barbarian, Druid, Knight, Warden, Gnome, Half-Orc, Wood
-  Elf), expertise-point thief skills beyond Remove Traps (needs lockpicking/stealth subsystems that
-  don't exist), alignment/languages (no mechanical hook to attach them to), and the one-level-per-session
-  XP cap / alternate reroll-all-HD leveling method. (True coin-weight encumbrance, previously listed
-  here, shipped in Milestone 19.)
+- **Classes**: gygax75-rules' custom human classes (Barbarian, Druid, Knight, Warden) and custom
+  demihuman classes (Gnome, Half-Orc, Wood Elf) — delve already implements every *standard* class from
+  both lists (Fighter/Cleric/Magic-User/Thief; Dwarf/Elf/Halfling). Also open: expertise-point thief
+  skills beyond Remove Traps (needs lockpicking/stealth subsystems that don't exist), alignment/languages
+  (no mechanical hook to attach them to), and the one-level-per-session XP cap / alternate reroll-all-HD
+  leveling method. (True coin-weight encumbrance, previously listed here, shipped in Milestone 19.)
 
 ### Multi-PC party support (Phase 1)
 
