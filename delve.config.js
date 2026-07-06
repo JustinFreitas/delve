@@ -39,7 +39,11 @@ module.exports = {
     name: "delve",
     // The jar is the "script"; PM2 spawns the JVM directly (no shell/.bat), matching ukulele.
     script: "build/libs/delve.jar",
-    interpreter: "java",
+    // Absolute path, not bare "java": PM2's own PATH resolves that to an installed JDK 17 ahead of
+    // this one, but the jar is built against build.gradle's Java 25 toolchain -- a version mismatch
+    // that only surfaces as an UnsupportedClassVersionError crash loop at PM2 spawn time, not a build
+    // failure, since gradle itself always uses the toolchain JDK regardless of what's first on PATH.
+    interpreter: "C:\\Users\\justi\\.jdks\\azul-25.0.2\\bin\\java.exe",
     // --enable-native-access=ALL-UNNAMED silences the Java 25 restricted-method warning (matches bootRun).
     interpreter_args: "--enable-native-access=ALL-UNNAMED -jar",
     cwd: __dirname,            // H2 ./database + delve.env resolve relative to the repo root
