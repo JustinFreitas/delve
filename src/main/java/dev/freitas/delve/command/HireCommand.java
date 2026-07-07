@@ -1,5 +1,6 @@
 package dev.freitas.delve.command;
 
+import dev.freitas.delve.config.GameProps;
 import dev.freitas.delve.discord.Command;
 import dev.freitas.delve.discord.CommandContext;
 import dev.freitas.delve.discord.HelpContext;
@@ -13,6 +14,7 @@ import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -36,13 +38,20 @@ public class HireCommand extends Command {
         RANDOM
     }
 
-    /** All classes, tankiest-first (lower armor-class proxy, then higher hit-die), the same ranking
-        {@link Toughness} applies to live combatants — filling every slot naturally hires one of each,
-        tankiest-first; fewer slots hires the N tankiest classes. */
-    static final List<CharacterClass> SMART_HIRE_ORDER = smartHireOrder();
+    /** Every DM-enabled class, tankiest-first (lower armor-class proxy, then higher hit-die), the same
+        ranking {@link Toughness} applies to live combatants — filling every slot naturally hires one of
+        each, tankiest-first; fewer slots hires the N tankiest classes. Computed per-instance (not
+        static) since it now depends on the DM's own {@link GameProps#isClassEnabled} configuration,
+        not just the fixed enum. */
+    private final List<CharacterClass> smartHireOrder;
 
-    private static List<CharacterClass> smartHireOrder() {
-        List<CharacterClass> classes = new ArrayList<>(List.of(CharacterClass.values()));
+    private static List<CharacterClass> smartHireOrder(GameProps gameProps) {
+        List<CharacterClass> classes = new ArrayList<>();
+        for (CharacterClass c : CharacterClass.values()) {
+            if (gameProps.isClassEnabled(c)) {
+                classes.add(c);
+            }
+        }
         classes.sort(Toughness.byToughness(HireCommand::retainerArmorProxy, CharacterClass::hitDie));
         return List.copyOf(classes);
     }
@@ -56,12 +65,20 @@ public class HireCommand extends Command {
 
     private final RetainerFactory retainerFactory;
     private final Dice dice;
+    private final GameProps gameProps;
 
-    public HireCommand(RetainerFactory retainerFactory, Dice dice, dev.freitas.delve.config.GameProps gameProps) {
+    public HireCommand(RetainerFactory retainerFactory, Dice dice, GameProps gameProps) {
         super("hire", "recruit");
         this.retainerFactory = retainerFactory;
         this.dice = dice;
+        this.gameProps = gameProps;
         HIRING_FEE = gameProps.getRetainerHiringFee();
+        this.smartHireOrder = smartHireOrder(gameProps);
+    }
+
+    /** Package-private: tests exercise this directly without a {@link CommandContext}. */
+    List<CharacterClass> getSmartHireOrder() {
+        return smartHireOrder;
     }
 
     @Override
@@ -119,6 +136,9 @@ public class HireCommand extends Command {
             return;
         }
         CharacterClass cls = CharacterClass.parse(first);
+        if (cls != null && !gameProps.isClassEnabled(cls)) {
+            cls = null; // parsed but not enabled by this DM -- treat the same as unrecognized
+        }
         if (cls != null && rest.equalsIgnoreCase("all")) {
             runBulkHire(ctx, save, payer, max, BulkMode.SINGLE, cls);
             return;
@@ -126,8 +146,13 @@ public class HireCommand extends Command {
 
         // --- existing single-hire path ---
         if (cls == null) {
+            String classNames = Arrays.stream(CharacterClass.values())
+                    .filter(gameProps::isClassEnabled)
+                    .map(c -> c.displayName().toLowerCase())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("");
             ctx.reply("Hire whom? `hire [pc-name] <class> [name]` — e.g. `hire fighter Bryn`. "
-                    + "Classes: cleric, fighter, magic-user, thief, dwarf, elf, halfling. "
+                    + "Classes: " + classNames + ". "
                     + "Or bulk-hire with `hire all`, `hire smart all`, `hire random all`, or `hire <class> all`.");
             return;
         }
@@ -165,6 +190,11 @@ public class HireCommand extends Command {
         without a {@link CommandContext}. */
     Retainer hireOne(SaveGame save, Character payer, CharacterClass cls, String name) {
         int loyalty = RetainerRules.baseLoyalty(payer.getAbilities().score(Ability.CHA));
+        // gygax75-rules: a Half-Orc's retainers (other than fellow Half-Orcs) start at -1 loyalty --
+        // orcish chaotic tendencies make trust harder to earn.
+        if (payer.getCharacterClass() == CharacterClass.HALF_ORC && cls != CharacterClass.HALF_ORC) {
+            loyalty -= 1;
+        }
         Retainer retainer = retainerFactory.create(name, cls, 1, loyalty);
         retainer.setOwner(payer.getName());
         int banked = dice.roll(3, 6);
@@ -183,8 +213,8 @@ public class HireCommand extends Command {
         for (int i = 0; i < count; i++) {
             CharacterClass cls = switch (mode) {
                 case SINGLE -> fixedClass;
-                case SMART -> SMART_HIRE_ORDER.get(i % SMART_HIRE_ORDER.size());
-                case RANDOM -> CharacterClass.values()[dice.d(CharacterClass.values().length) - 1];
+                case SMART -> smartHireOrder.get(i % smartHireOrder.size());
+                case RANDOM -> smartHireOrder.get(dice.d(smartHireOrder.size()) - 1);
             };
             // Draw without replacement: <= 7 hires (the CHA cap ceiling), 16 names -> never a duplicate.
             String name = pool.remove(dice.d(pool.size()) - 1);
@@ -266,7 +296,7 @@ public class HireCommand extends Command {
             if (payer == null) {
                 break; // best effort: no PC can afford/authorize another hire
             }
-            CharacterClass cls = SMART_HIRE_ORDER.get(i % SMART_HIRE_ORDER.size());
+            CharacterClass cls = smartHireOrder.get(i % smartHireOrder.size());
             String name = pool.isEmpty() ? NAMES.get(dice.d(NAMES.size()) - 1) : pool.remove(dice.d(pool.size()) - 1);
             hires.add(new PartyHire(hireOne(save, payer, cls, name), payer));
         }

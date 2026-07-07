@@ -1,5 +1,6 @@
 package dev.freitas.delve.command;
 
+import dev.freitas.delve.config.GameProps;
 import dev.freitas.delve.game.CharacterFactory;
 import dev.freitas.delve.game.Outfitter;
 import dev.freitas.delve.game.engine.AbilityScores;
@@ -29,12 +30,14 @@ public class RollCharacterCommand extends Command {
     private final Dice dice;
     private final CharacterFactory characterFactory;
     private final SpellService spells;
+    private final GameProps gameProps;
 
-    public RollCharacterCommand(Dice dice, CharacterFactory characterFactory, SpellService spells) {
+    public RollCharacterCommand(Dice dice, CharacterFactory characterFactory, SpellService spells, GameProps gameProps) {
         super("roll-character", "rollchar", "newchar");
         this.dice = dice;
         this.characterFactory = characterFactory;
         this.spells = spells;
+        this.gameProps = gameProps;
     }
 
     @Override
@@ -43,7 +46,7 @@ public class RollCharacterCommand extends Command {
         String classToken = tokens.length > 0 ? tokens[0] : "";
 
         CharacterClass characterClass = CharacterClass.parse(classToken);
-        if (characterClass == null) {
+        if (characterClass == null || !gameProps.isClassEnabled(characterClass)) {
             ctx.reply(classListMessage());
             return;
         }
@@ -128,6 +131,9 @@ public class RollCharacterCommand extends Command {
     private String classListMessage() {
         StringBuilder sb = new StringBuilder("Choose a class: `roll-character <class> [name]`\n```\n");
         for (CharacterClass c : CharacterClass.values()) {
+            if (!gameProps.isClassEnabled(c)) {
+                continue;
+            }
             String req = c.minimumScores().isEmpty()
                     ? ""
                     : "  requires " + c.minimumScores().entrySet().stream()
@@ -143,12 +149,16 @@ public class RollCharacterCommand extends Command {
     @Override
     public void provideHelp(HelpContext help) {
         help.addUsage("<class> [name] [bare]");
-        help.addDescription("Rolls a new level-1 character of the given B/X class (Cleric, Fighter, "
-                + "Magic-User, Thief, Dwarf, Elf, Halfling). The first roll starts your party; every "
-                + "roll after that adds another PC (up to " + SaveGame.MAX_CHARACTERS + ") instead of "
-                + "replacing anyone. By default the new PC is immediately best-effort auto-geared "
-                + "(a class-appropriate weapon, armor, shield, and torches, spending as much of their "
-                + "rolled gold as it can afford); add `bare` at the end to skip that and shop for "
-                + "yourself instead with `buy`.");
+        String classNames = java.util.Arrays.stream(CharacterClass.values())
+                .filter(gameProps::isClassEnabled)
+                .map(CharacterClass::displayName)
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("");
+        help.addDescription("Rolls a new level-1 character of the given B/X class (" + classNames + "). "
+                + "The first roll starts your party; every roll after that adds another PC (up to "
+                + SaveGame.MAX_CHARACTERS + ") instead of replacing anyone. By default the new PC is "
+                + "immediately best-effort auto-geared (a class-appropriate weapon, armor, shield, and "
+                + "torches, spending as much of their rolled gold as it can afford); add `bare` at the "
+                + "end to skip that and shop for yourself instead with `buy`.");
     }
 }

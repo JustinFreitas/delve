@@ -406,8 +406,30 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   Not modeled: gems/jewelry and general-item storage (gygax75's "Storing Treasure" also covers those, but
   gems already auto-convert to gold at loot time and a rentable treasure-chest-as-a-container is a real,
   separate feature not bundled in here).
+- **Milestone 24** — gygax75-rules' 7 custom classes, DM-configurable: the 4 custom human classes
+  (Barbarian, Druid, Knight, Warden) and 3 custom demihuman classes (Gnome, Half-Orc, Wood Elf) from the
+  Classes Known Gap, each off by default — a new `GameProps.enabledCustomClasses` comma list (e.g.
+  `"barbarian,druid,gnome"`) opts a DM's server into specific ones, checked by `/roll-character` and
+  `/hire` (and their `GameFacade` web equivalents); `/pregen`/`/npc`/`/roster` stay ungated since they're
+  DM/authoring tools, not something a player rolls for themselves. Each class carries its own hit die,
+  prime requisite(s), minimum ability scores, saving-throw table, and XP/level progression, transcribed
+  straight from gygax75-rules; every one of them reuses one of the 3 existing THAC0 tiers exactly (no new
+  attack-progression math needed). Druid and Gnome get real, distinct spellcasting rather than a reskin
+  of Cleric/Magic-User: a new `Spell.Tradition` (`NATURE` alongside Druid and Wood Elf, `ILLUSION` for
+  Gnome) with ~32 Nature and ~41 Illusion spells of their own, almost all flavor-cast utility spells
+  reusing the existing generic spellcasting machinery (a few damage/heal spells hook the same generic
+  paths Magic Missile/Cure Light Wounds already use) — Nature is prayer-based like Cleric's Divine list,
+  Illusion is spellbook-gated like Arcane. Starting kits/gear follow each class's own restrictions (e.g.
+  no metal armor for a Druid, no missile weapon for a Knight) as starting-kit data only, matching this
+  codebase's existing precedent that no class has ever had *live* weapon/armor enforcement. Three simple,
+  always-on class abilities were cheap enough to include outright: a Barbarian's level-scaled AC bonus
+  ("Agile Fighting"), a Half-Orc's Thief-style backstab (plus a −1 starting loyalty penalty on retainers
+  they hire, echoing their orcish reputation), and a Wood Elf's +1 missile-attack bonus. Deliberately out
+  of scope (each needs a subsystem delve doesn't have for *any* class): wilderness/expertise-point skills,
+  Druid shapechange, mounted combat, alignment-gated rules, followers/strongholds, and per-character (vs.
+  whole-party) surprise — see the updated Known Gap below for the full list.
 
-All milestones are complete (398 tests green).
+All milestones are complete (421 tests green).
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
   doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps
@@ -444,9 +466,14 @@ half-build it:
   than a quick add-on); magical research and rune transferring — both have nothing to act on since delve
   has no magic-item system beyond healing potions. (Banking and Inn-tier resting costs, previously listed
   here, shipped in Milestone 23.)
-- **Classes**: gygax75-rules' custom human classes (Barbarian, Druid, Knight, Warden) and custom
-  demihuman classes (Gnome, Half-Orc, Wood Elf) — delve already implements every *standard* class from
-  both lists (Fighter/Cleric/Magic-User/Thief; Dwarf/Elf/Halfling). Also open: expertise-point thief
+- **Classes**: the mechanical framework and starting kit for all 7 gygax75-rules custom classes
+  (Barbarian, Druid, Knight, Warden, Gnome, Half-Orc, Wood Elf) shipped in Milestone 24, DM-gated off by
+  default. Each class's own larger subsystem is still deliberately deferred, since it needs machinery
+  delve doesn't have for *any* class: Barbarian wilderness/expertise skills and its 8th-level horde; Druid
+  shapechange and its 12-druid ceiling; Knight mounted combat/chivalric-code XP denial (needs alignment)/
+  stronghold; Warden tracking/followers/"surprised only on a 1" (today's surprise roll is whole-party, not
+  per-character); Gnome/Half-Orc expertise-point skills beyond backstab; Wood Elf's own "surprised only on
+  a 1" and foraging bonus. Also still open across every class, standard or custom: expertise-point thief
   skills beyond Remove Traps (needs lockpicking/stealth subsystems that don't exist), alignment/languages
   (no mechanical hook to attach them to), and the one-level-per-session XP cap / alternate reroll-all-HD
   leveling method. (True coin-weight encumbrance, previously listed here, shipped in Milestone 19.)
@@ -500,7 +527,7 @@ half-built:
 |---|---|
 | `/ping` | Liveness check + gateway latency. |
 | `/help` `[command]` | List commands, or detailed help for one. |
-| `/roll-character <class> [name] [bare]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling); auto-gears with a class-appropriate kit by default, or `bare` to shop for yourself with `/buy`. |
+| `/roll-character <class> [name] [bare]` | Roll a new level-1 character (Cleric, Fighter, Magic-User, Thief, Dwarf, Elf, Halfling, plus any gygax75 custom class — Barbarian, Druid, Knight, Warden, Gnome, Half-Orc, Wood Elf — this DM has enabled via `GameProps.enabledCustomClasses`); auto-gears with a class-appropriate kit by default, or `bare` to shop for yourself with `/buy`. |
 | `/outfit [pc-name]` | Best-effort auto-gear an already-rolled PC (town only) — the same thing `/roll-character` does by default. |
 | `/sheet [pc-name]` | Show a character sheet — your first-rolled PC by default, or name a specific PC. |
 | `/enter [module]` | Begin a delve — procedural, or run an authored module by name. |

@@ -57,6 +57,55 @@ class SpellTownTest {
         assertThat(SpellTables.slotsAt(CharacterClass.CLERIC, 2, 1)).isEqualTo(1);
         assertThat(SpellTables.isCaster(CharacterClass.FIGHTER)).isFalse();
         assertThat(SpellTables.isCaster(CharacterClass.ELF)).isTrue();
+
+        // gygax75 custom casters: Druid and Wood Elf share the Nature table, Gnome has its own Illusion one.
+        assertThat(SpellTables.isCaster(CharacterClass.DRUID)).isTrue();
+        assertThat(SpellTables.isCaster(CharacterClass.WOOD_ELF)).isTrue();
+        assertThat(SpellTables.isCaster(CharacterClass.GNOME)).isTrue();
+        assertThat(SpellTables.isCaster(CharacterClass.BARBARIAN)).isFalse();
+        assertThat(SpellTables.isCaster(CharacterClass.KNIGHT)).isFalse();
+        assertThat(SpellTables.isCaster(CharacterClass.WARDEN)).isFalse();
+        assertThat(SpellTables.isCaster(CharacterClass.HALF_ORC)).isFalse();
+        assertThat(SpellTables.slotsAt(CharacterClass.DRUID, 1, 1)).isEqualTo(1);
+        assertThat(SpellTables.slotsAt(CharacterClass.WOOD_ELF, 1, 1))
+                .isEqualTo(SpellTables.slotsAt(CharacterClass.DRUID, 1, 1)); // literally the same table
+        assertThat(SpellTables.slotsAt(CharacterClass.GNOME, 1, 1)).isEqualTo(1);
+        assertThat(SpellTables.tradition(CharacterClass.DRUID)).isEqualTo(Spell.Tradition.NATURE);
+        assertThat(SpellTables.tradition(CharacterClass.GNOME)).isEqualTo(Spell.Tradition.ILLUSION);
+    }
+
+    @Test
+    void druidAndWoodElfPrayForTheirFullNatureListLikeAClericPraysForDivine() {
+        Character druid = factory.create("Robin", CharacterClass.DRUID, new AbilityScores(9, 9, 9, 9, 15, 9));
+        List<Spell> available = spells.available(druid);
+
+        assertThat(available).isNotEmpty();
+        assertThat(available).allMatch(s -> s.tradition() == Spell.Tradition.NATURE);
+        assertThat(available).contains(Spell.ENTANGLE, Spell.CALL_LIGHTNING);
+        // No spellbook needed -- it's prayer-based, just like Cleric.
+        assertThat(druid.getSpellbook()).isEmpty();
+
+        Character woodElf = factory.create("Sylvan", CharacterClass.WOOD_ELF, new AbilityScores(9, 9, 9, 9, 15, 9));
+        assertThat(spells.available(woodElf)).containsExactlyInAnyOrderElementsOf(available);
+    }
+
+    @Test
+    void gnomeSpellbookIsGatedJustLikeAnArcaneCastersIs() {
+        Character gnome = factory.create("Pip", CharacterClass.GNOME, new AbilityScores(9, 12, 9, 14, 9, 9));
+        List<Spell> available = spells.available(gnome);
+
+        // Only the one seeded starting spell is known/available -- not the whole Illusion list.
+        assertThat(available).hasSize(1);
+        assertThat(available.get(0).tradition()).isEqualTo(Spell.Tradition.ILLUSION);
+
+        gnome.getSpellbook().add("Mirror Image");
+        assertThat(spells.available(gnome)).extracting(Spell::displayName).contains("Mirror Image");
+    }
+
+    @Test
+    void nonCastersHaveNoAvailableSpellsAtAll() {
+        Character barbarian = factory.create("Conan", CharacterClass.BARBARIAN, new AbilityScores(15, 9, 9, 9, 9, 9));
+        assertThat(spells.available(barbarian)).isEmpty();
     }
 
     @Test

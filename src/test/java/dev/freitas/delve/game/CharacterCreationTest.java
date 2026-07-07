@@ -7,6 +7,7 @@ import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Dice;
+import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.SaveGame;
 import java.util.Random;
@@ -44,6 +45,15 @@ class CharacterCreationTest {
         assertThat(CharacterClass.DWARF.meetsRequirements(fineCon)).isTrue();
         // Fighter has no minimums.
         assertThat(CharacterClass.FIGHTER.meetsRequirements(weakCon)).isTrue();
+
+        // Warden (gygax75) requires CON 9+ and WIS 9+ -- a dual minimum, unlike Dwarf's single one.
+        AbilityScores weakWis = new AbilityScores(12, 10, 7, 10, 9, 10); // WIS 7, CON 9
+        assertThat(CharacterClass.WARDEN.meetsRequirements(weakWis)).isFalse();
+        assertThat(CharacterClass.WARDEN.unmetRequirements(weakWis)).contains("WIS 9+");
+        AbilityScores meetsBoth = new AbilityScores(12, 10, 10, 10, 9, 9);
+        assertThat(CharacterClass.WARDEN.meetsRequirements(meetsBoth)).isTrue();
+        // Half-Orc (gygax75) has no minimums at all.
+        assertThat(CharacterClass.HALF_ORC.meetsRequirements(weakWis)).isTrue();
     }
 
     @Test
@@ -54,6 +64,38 @@ class CharacterCreationTest {
         assertThat(CharacterClass.parse("Fighter")).isEqualTo(CharacterClass.FIGHTER);
         assertThat(CharacterClass.parse("hobbit")).isEqualTo(CharacterClass.HALFLING);
         assertThat(CharacterClass.parse("bard")).isNull();
+
+        // gygax75 custom classes parse the same way.
+        assertThat(CharacterClass.parse("barbarian")).isEqualTo(CharacterClass.BARBARIAN);
+        assertThat(CharacterClass.parse("Half-Orc")).isEqualTo(CharacterClass.HALF_ORC);
+        assertThat(CharacterClass.parse("wood elf")).isEqualTo(CharacterClass.WOOD_ELF);
+        assertThat(CharacterClass.parse("WoodElf")).isEqualTo(CharacterClass.WOOD_ELF);
+    }
+
+    @Test
+    void onlyTheSevenGygax75ClassesAreFlaggedCustom() {
+        for (CharacterClass cls : CharacterClass.values()) {
+            boolean expectedCustom = switch (cls) {
+                case BARBARIAN, DRUID, KNIGHT, WARDEN, GNOME, HALF_ORC, WOOD_ELF -> true;
+                default -> false;
+            };
+            assertThat(cls.isCustom()).as(cls.toString()).isEqualTo(expectedCustom);
+        }
+    }
+
+    @Test
+    void newClassesGetTheRightSpellTraditionOrNoneAtAll() {
+        assertThat(CharacterClass.DRUID.tradition()).isEqualTo(Spell.Tradition.NATURE);
+        assertThat(CharacterClass.WOOD_ELF.tradition()).isEqualTo(Spell.Tradition.NATURE);
+        assertThat(CharacterClass.GNOME.tradition()).isEqualTo(Spell.Tradition.ILLUSION);
+        assertThat(CharacterClass.BARBARIAN.tradition()).isNull();
+        assertThat(CharacterClass.KNIGHT.tradition()).isNull();
+        assertThat(CharacterClass.WARDEN.tradition()).isNull();
+        assertThat(CharacterClass.HALF_ORC.tradition()).isNull();
+        // Neither Nature nor Illusion is Arcane/Divine -- the derived booleans stay false for them.
+        assertThat(CharacterClass.DRUID.isArcaneCaster()).isFalse();
+        assertThat(CharacterClass.DRUID.isDivineCaster()).isFalse();
+        assertThat(CharacterClass.GNOME.isArcaneCaster()).isFalse();
     }
 
     @Test
@@ -92,11 +134,61 @@ class CharacterCreationTest {
     }
 
     @Test
+    void barbarianAgileFightingBonusScalesWithLevelButOnlyForBarbarians() {
+        AbilityScores scores = new AbilityScores(15, 9, 9, 9, 9, 9); // DEX 9 -> no DEX mod, isolates the bonus
+        Character barbarian = factory.create("Conan", CharacterClass.BARBARIAN, scores);
+        int baseAc = barbarian.armorClass();
+
+        barbarian.setLevel(3);
+        assertThat(barbarian.armorClass()).isEqualTo(baseAc); // no bonus yet
+        barbarian.setLevel(4);
+        assertThat(barbarian.armorClass()).isEqualTo(baseAc - 1);
+        barbarian.setLevel(6);
+        assertThat(barbarian.armorClass()).isEqualTo(baseAc - 2);
+        barbarian.setLevel(8);
+        assertThat(barbarian.armorClass()).isEqualTo(baseAc - 3);
+        barbarian.setLevel(10);
+        assertThat(barbarian.armorClass()).isEqualTo(baseAc - 4);
+
+        // A Fighter with the same gear/level never gets this bonus.
+        Character fighter = factory.create("Bram", CharacterClass.FIGHTER, scores);
+        fighter.setLevel(10);
+        assertThat(fighter.armorClass()).isEqualTo(baseAc);
+    }
+
+    @Test
+    void woodElfGetsAPlusOneMissileBonusOtherClassesDoNot() {
+        AbilityScores scores = new AbilityScores(9, 9, 9, 9, 9, 9); // DEX 9 -> +0 base
+        Character woodElf = factory.create("Sylvan", CharacterClass.WOOD_ELF, scores);
+        Character fighter = factory.create("Bram", CharacterClass.FIGHTER, scores);
+
+        assertThat(woodElf.missileToHitModifier()).isEqualTo(1);
+        assertThat(fighter.missileToHitModifier()).isEqualTo(0);
+    }
+
+    @Test
     void magicUserStartsWithReadMagicAndOneSpell() {
         AbilityScores scores = new AbilityScores(9, 16, 9, 12, 12, 9);
         Character mu = factory.create("Raistlin", CharacterClass.MAGIC_USER, scores);
         assertThat(mu.getSpellbook()).hasSize(2).contains("Read Magic");
         assertThat(mu.getArmor()).isEqualTo(Armor.NONE);
+    }
+
+    @Test
+    void gnomeStartsWithOneIllusionSpellButNoReadMagicSinceItIsNotAnArcaneCaster() {
+        AbilityScores scores = new AbilityScores(9, 12, 9, 14, 9, 9);
+        Character gnome = factory.create("Pip", CharacterClass.GNOME, scores);
+        assertThat(gnome.getSpellbook()).hasSize(1).doesNotContain("Read Magic");
+        Spell seeded = Spell.parse(gnome.getSpellbook().get(0));
+        assertThat(seeded).isNotNull();
+        assertThat(seeded.tradition()).isEqualTo(Spell.Tradition.ILLUSION);
+    }
+
+    @Test
+    void druidNeedsNoStartingSpellbookSincePrayerBasedLikeCleric() {
+        AbilityScores scores = new AbilityScores(9, 9, 9, 9, 15, 9);
+        Character druid = factory.create("Robin", CharacterClass.DRUID, scores);
+        assertThat(druid.getSpellbook()).isEmpty();
     }
 
     @Test

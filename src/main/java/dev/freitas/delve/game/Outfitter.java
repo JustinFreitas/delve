@@ -36,6 +36,10 @@ public final class Outfitter {
     // Plate mail dropped from 400gp to 60gp when GearCatalog's prices were reconciled to gygax75-rules
     // (was previously unreachable at typical 30-180gp starting gold, hence not offered at all before).
     private static final List<Armor> HEAVY_ARMOR_TIERS = List.of(Armor.PLATE_MAIL, Armor.CHAIN_MAIL, Armor.LEATHER);
+    // Barbarian/Warden/Half-Orc: leather or chainmail, no plate.
+    private static final List<Armor> MEDIUM_ARMOR_TIERS = List.of(Armor.CHAIN_MAIL, Armor.LEATHER);
+    // Knight: "any metal armor" but scorns non-metal (leather) as unworthy of their station.
+    private static final List<Armor> METAL_ARMOR_TIERS = List.of(Armor.PLATE_MAIL, Armor.CHAIN_MAIL);
 
     private static Kit kitFor(CharacterClass characterClass) {
         return switch (characterClass) {
@@ -46,6 +50,13 @@ public final class Outfitter {
             case THIEF -> new Kit("Sword", new DamageRoll(1, 8), List.of(Armor.LEATHER), false);
             case ELF -> new Kit("Sword", new DamageRoll(1, 8), HEAVY_ARMOR_TIERS, false);
             case HALFLING -> new Kit("Short sword", new DamageRoll(1, 6), List.of(Armor.LEATHER), false);
+            // gygax75-rules custom classes.
+            case BARBARIAN, HALF_ORC -> new Kit("Sword", new DamageRoll(1, 8), MEDIUM_ARMOR_TIERS, true);
+            case DRUID -> new Kit("Dagger", DAGGER_DAMAGE, List.of(), false); // no metal armor or shield
+            case KNIGHT -> new Kit("Sword", new DamageRoll(1, 8), METAL_ARMOR_TIERS, true);
+            case WARDEN -> new Kit("Sword", new DamageRoll(1, 8), MEDIUM_ARMOR_TIERS, true);
+            case GNOME -> new Kit("Short sword", new DamageRoll(1, 6), List.of(Armor.LEATHER), false);
+            case WOOD_ELF -> new Kit("Sword", new DamageRoll(1, 8), List.of(Armor.LEATHER), true);
         };
     }
 

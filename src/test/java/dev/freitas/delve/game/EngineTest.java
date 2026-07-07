@@ -61,6 +61,14 @@ class EngineTest {
         assertThat(CombatTables.classThac0(CharacterClass.MAGIC_USER, 6)).isEqualTo(17);
         // Demihumans attack as fighters.
         assertThat(CombatTables.classThac0(CharacterClass.DWARF, 4)).isEqualTo(17);
+        // gygax75 custom classes reuse the same three tiers, no new tier functions needed.
+        assertThat(CombatTables.classThac0(CharacterClass.BARBARIAN, 4)).isEqualTo(17); // fighter tier
+        assertThat(CombatTables.classThac0(CharacterClass.KNIGHT, 4)).isEqualTo(17);
+        assertThat(CombatTables.classThac0(CharacterClass.WARDEN, 4)).isEqualTo(17);
+        assertThat(CombatTables.classThac0(CharacterClass.WOOD_ELF, 4)).isEqualTo(17);
+        assertThat(CombatTables.classThac0(CharacterClass.DRUID, 5)).isEqualTo(17); // cleric/thief tier
+        assertThat(CombatTables.classThac0(CharacterClass.HALF_ORC, 5)).isEqualTo(17);
+        assertThat(CombatTables.classThac0(CharacterClass.GNOME, 6)).isEqualTo(17); // magic-user tier
     }
 
     @Test
@@ -90,6 +98,17 @@ class EngineTest {
         assertThat(Advancement.levelForXp(CharacterClass.FIGHTER, 2500)).isEqualTo(2);
         // Beyond the table, capped at class max.
         assertThat(Advancement.levelForXp(CharacterClass.HALFLING, 99_999_999)).isEqualTo(8);
+
+        // gygax75 custom classes: level caps per their own progression tables.
+        assertThat(Advancement.maxLevel(CharacterClass.BARBARIAN)).isEqualTo(14);
+        assertThat(Advancement.maxLevel(CharacterClass.DRUID)).isEqualTo(14);
+        assertThat(Advancement.maxLevel(CharacterClass.KNIGHT)).isEqualTo(14);
+        assertThat(Advancement.maxLevel(CharacterClass.WARDEN)).isEqualTo(14);
+        assertThat(Advancement.maxLevel(CharacterClass.GNOME)).isEqualTo(8);
+        assertThat(Advancement.maxLevel(CharacterClass.HALF_ORC)).isEqualTo(8);
+        assertThat(Advancement.maxLevel(CharacterClass.WOOD_ELF)).isEqualTo(10);
+        assertThat(Advancement.xpForLevel(CharacterClass.BARBARIAN, 2)).isEqualTo(2500);
+        assertThat(Advancement.levelForXp(CharacterClass.GNOME, 99_999_999)).isEqualTo(8);
     }
 
     @Test
@@ -129,6 +148,17 @@ class EngineTest {
         assertThat(SavingThrows.forCharacter(CharacterClass.HALFLING, 1).deathPoison()).isEqualTo(8);
         // Above the top band, the best row is reused.
         assertThat(SavingThrows.forCharacter(CharacterClass.FIGHTER, 99).deathPoison()).isEqualTo(4);
+
+        // gygax75 custom classes: spot-check one band each, transcribed straight from their own tables.
+        assertThat(SavingThrows.forCharacter(CharacterClass.BARBARIAN, 1).deathPoison()).isEqualTo(10);
+        assertThat(SavingThrows.forCharacter(CharacterClass.KNIGHT, 1).deathPoison()).isEqualTo(12);
+        assertThat(SavingThrows.forCharacter(CharacterClass.WARDEN, 1).deathPoison()).isEqualTo(12);
+        assertThat(SavingThrows.forCharacter(CharacterClass.GNOME, 1).deathPoison()).isEqualTo(8);
+        assertThat(SavingThrows.forCharacter(CharacterClass.HALF_ORC, 1).deathPoison()).isEqualTo(13);
+        assertThat(SavingThrows.forCharacter(CharacterClass.WOOD_ELF, 1).deathPoison()).isEqualTo(12);
+        // Druid's table is identical to Cleric's, by design.
+        assertThat(SavingThrows.forCharacter(CharacterClass.DRUID, 1).deathPoison())
+                .isEqualTo(SavingThrows.forCharacter(CharacterClass.CLERIC, 1).deathPoison());
     }
 
     // --- Monsters ----------------------------------------------------------

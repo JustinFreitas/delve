@@ -23,7 +23,7 @@ class HireCommandTest {
 
     @Test
     void smartHireOrderIsFighterDwarfClericElfHalflingThiefMagicUser() {
-        assertThat(HireCommand.SMART_HIRE_ORDER).containsExactly(
+        assertThat(hireCommand.getSmartHireOrder()).containsExactly(
                 CharacterClass.FIGHTER, CharacterClass.DWARF, CharacterClass.CLERIC,
                 CharacterClass.ELF, CharacterClass.HALFLING, CharacterClass.THIEF, CharacterClass.MAGIC_USER);
     }
@@ -62,7 +62,7 @@ class HireCommandTest {
         List<Retainer> hired = hireCommand.bulkHire(save, pc, HireCommand.BulkMode.SMART, null, 7);
 
         assertThat(hired.stream().map(Retainer::getCharacterClass).collect(Collectors.toList()))
-                .containsExactlyElementsOf(HireCommand.SMART_HIRE_ORDER);
+                .containsExactlyElementsOf(hireCommand.getSmartHireOrder());
     }
 
     @Test
@@ -79,10 +79,11 @@ class HireCommandTest {
         // Regression-locked against seed 11: the class roll, name-pool roll, banked-gold roll, and the
         // (reroll-floored) hit-die roll inside retainerFactory.create(...) all interleave on the same
         // Dice, so this exact sequence is only reproducible by re-running the real bulkHire path (not by
-        // hand-simulating the rolls).
+        // hand-simulating the rolls). RANDOM picks from smartHireOrder (toughness-sorted), not
+        // CharacterClass.values() declaration order, so this differs from a raw enum-index mapping.
         assertThat(hired.stream().map(Retainer::getCharacterClass).collect(Collectors.toList()))
-                .containsExactly(CharacterClass.FIGHTER, CharacterClass.ELF, CharacterClass.MAGIC_USER,
-                        CharacterClass.DWARF, CharacterClass.FIGHTER);
+                .containsExactly(CharacterClass.DWARF, CharacterClass.THIEF, CharacterClass.FIGHTER,
+                        CharacterClass.HALFLING, CharacterClass.MAGIC_USER);
     }
 
     @Test
@@ -161,6 +162,27 @@ class HireCommandTest {
         assertThat(leader.getGold()).isEqualTo(1000); // ...not from the party's first-rolled PC
         assertThat(save.getRetainers()).containsExactly(hired);
         assertThat(hired.getOwner()).isEqualTo(charismatic.getName());
+    }
+
+    @Test
+    void halfOrcPayersRetainersStartAtLoyaltyMinusOneUnlessTheyAreAlsoHalfOrcs() {
+        SaveGame save = new SaveGame();
+        Character halfOrc = pc(1000);
+        halfOrc.setCharacterClass(CharacterClass.HALF_ORC);
+        halfOrc.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 18)); // CHA 18 -> base loyalty known
+        save.setCharacter(halfOrc);
+
+        Retainer fighter = hireCommand.hireOne(save, halfOrc, CharacterClass.FIGHTER, "Grunt");
+        Retainer fellowOrc = hireCommand.hireOne(save, halfOrc, CharacterClass.HALF_ORC, "Kin");
+
+        assertThat(fighter.getLoyalty()).isEqualTo(RetainerRules.baseLoyalty(18) - 1);
+        assertThat(fellowOrc.getLoyalty()).isEqualTo(RetainerRules.baseLoyalty(18)); // no penalty among orcs
+
+        // A non-Half-Orc payer never applies this penalty.
+        Character human = pc(1000);
+        human.setAbilities(new AbilityScores(9, 9, 9, 9, 9, 18));
+        Retainer viaHuman = hireCommand.hireOne(new SaveGame(), human, CharacterClass.FIGHTER, "Bryn");
+        assertThat(viaHuman.getLoyalty()).isEqualTo(RetainerRules.baseLoyalty(18));
     }
 
     @Test

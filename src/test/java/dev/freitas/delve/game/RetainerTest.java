@@ -79,10 +79,10 @@ class RetainerTest {
     }
 
     @Test
-    void everyClassExceptMagicUserGetsAMissileBackupWeapon() {
+    void everyClassExceptMagicUserAndKnightGetsAMissileBackupWeapon() {
         for (CharacterClass cls : CharacterClass.values()) {
             RetainerFactory.Equipment eq = RetainerFactory.equipmentFor(cls);
-            if (cls == CharacterClass.MAGIC_USER) {
+            if (cls == CharacterClass.MAGIC_USER || cls == CharacterClass.KNIGHT) {
                 assertThat(eq.secondaryWeapon()).as(cls + " has no missile backup").isNull();
             } else {
                 assertThat(eq.secondaryWeapon()).as(cls + " missile backup").isNotNull();

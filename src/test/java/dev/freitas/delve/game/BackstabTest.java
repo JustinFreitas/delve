@@ -20,7 +20,8 @@ import dev.freitas.delve.game.session.SpellService;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 
-/** A Thief attacking a surprised target gets +4 to hit and double damage ({@code CombatService}). */
+/** A Thief (and, per gygax75-rules, a Half-Orc) attacking a surprised target gets +4 to hit and double
+    damage ({@code CombatService}). */
 class BackstabTest {
 
     @Test
@@ -29,19 +30,47 @@ class BackstabTest {
         int normalTotal = 0;
         int trials = 100;
         for (int seed = 0; seed < trials; seed++) {
-            surprisedTotal += firstRoundThiefDamage(seed, true);
-            normalTotal += firstRoundThiefDamage(seed, false);
+            surprisedTotal += firstRoundDamage(seed, CharacterClass.THIEF, true);
+            normalTotal += firstRoundDamage(seed, CharacterClass.THIEF, false);
         }
         assertThat(surprisedTotal).isGreaterThan(normalTotal);
     }
 
-    /** One fresh fight (Thief vs. a tanky Bugbear so it won't die from a single hit), returning how
-        much damage the Thief's first-round attack dealt. */
-    private int firstRoundThiefDamage(long seed, boolean monstersSurprised) {
+    @Test
+    void aSurprisedHalfOrcAttackAlsoBackstabsLikeAThiefDoes() {
+        int surprisedTotal = 0;
+        int normalTotal = 0;
+        int trials = 100;
+        for (int seed = 0; seed < trials; seed++) {
+            surprisedTotal += firstRoundDamage(seed, CharacterClass.HALF_ORC, true);
+            normalTotal += firstRoundDamage(seed, CharacterClass.HALF_ORC, false);
+        }
+        assertThat(surprisedTotal).isGreaterThan(normalTotal);
+    }
+
+    @Test
+    void aSurprisedFighterAttackGetsNoBackstabBonus() {
+        // A Fighter's surprised-vs-normal damage should differ far less than a Thief's/Half-Orc's,
+        // since it lacks the +4-to-hit/double-damage backstab bonus entirely.
+        int surprisedTotal = 0;
+        int normalTotal = 0;
+        int trials = 100;
+        for (int seed = 0; seed < trials; seed++) {
+            surprisedTotal += firstRoundDamage(seed, CharacterClass.FIGHTER, true);
+            normalTotal += firstRoundDamage(seed, CharacterClass.FIGHTER, false);
+        }
+        // Surprise still grants the free round, so some increase is expected -- just nowhere near a
+        // backstab's roughly-doubling effect. Loosely bound it well under 2x rather than asserting equality.
+        assertThat(surprisedTotal).isLessThan(normalTotal * 2);
+    }
+
+    /** One fresh fight (attacker vs. a tanky Bugbear so it won't die from a single hit), returning how
+        much damage the attacker's first-round attack dealt. */
+    private int firstRoundDamage(long seed, CharacterClass attackerClass, boolean monstersSurprised) {
         Dice dice = new Dice(new Random(seed));
         CombatService combat = new CombatService(dice, new SpellService(dice));
         Character hero = new CharacterFactory(dice)
-                .create("Rogue", CharacterClass.THIEF, new AbilityScores(9, 9, 9, 9, 9, 9));
+                .create("Rogue", attackerClass, new AbilityScores(9, 9, 9, 9, 9, 9));
         hero.setMaxHp(200);
         hero.setCurrentHp(200);
         SaveGame save = combatSave(hero, Bestiary.BUGBEAR, 1);

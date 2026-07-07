@@ -10,34 +10,51 @@ import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.GearCatalog;
 import dev.freitas.delve.game.engine.Leveling;
+import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Container;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
  * Builds a complete level-1 B/X character from rolled abilities: hit points (hit die + CON modifier,
- * minimum 1), starting gold (3d6 × 10 gp), a class-appropriate equipment package, and — for arcane
- * casters — a starting spellbook. A guided shopping phase can replace the fixed packages later
- * (Milestone 7 / {@code /town}).
+ * minimum 1), starting gold (3d6 × 10 gp), a class-appropriate equipment package, and — for spellbook
+ * casters (Arcane, Illusion) — a starting spellbook. A guided shopping phase can replace the fixed
+ * packages later (Milestone 7 / {@code /town}).
  */
 @Component
 public class CharacterFactory {
 
-    // B/X 1st-level magic-user spells a new caster can start with (besides the always-known Read Magic).
-    private static final List<String> STARTING_ARCANE_SPELLS = List.of(
-            "Charm Person",
-            "Detect Magic",
-            "Floating Disc",
-            "Hold Portal",
-            "Light",
-            "Magic Missile",
-            "Protection from Evil",
-            "Read Languages",
-            "Shield",
-            "Sleep",
-            "Ventriloquism");
+    // 1st-level spells a new spellbook caster can start with, one random pick per tradition (besides
+    // Arcane's always-known Read Magic -- Illusion has no equivalent always-known utility spell since
+    // gygax75's Gnome "Read Magic"/"Detect Magic"/"Light" are the same spells as Magic-User's, already
+    // covered by the Arcane entries rather than duplicated under Illusion -- see Spell.java).
+    private static final Map<Spell.Tradition, List<String>> STARTING_SPELLBOOK_SPELLS = Map.of(
+            Spell.Tradition.ARCANE, List.of(
+                    "Charm Person",
+                    "Detect Magic",
+                    "Floating Disc",
+                    "Hold Portal",
+                    "Light",
+                    "Magic Missile",
+                    "Protection from Evil",
+                    "Read Languages",
+                    "Shield",
+                    "Sleep",
+                    "Ventriloquism"),
+            Spell.Tradition.ILLUSION, List.of(
+                    "Auditory Illusion",
+                    "Chromatic Orb",
+                    "Color Spray",
+                    "Dancing Lights",
+                    "Detect Illusion",
+                    "Glamour",
+                    "Hypnotism",
+                    "Phantasmal Force",
+                    "Spook",
+                    "Wall of Fog"));
 
     private final Dice dice;
 
@@ -76,10 +93,17 @@ public class CharacterFactory {
 
         c.setGold(dice.roll(3, 6) * 10);
 
-        if (characterClass.isArcaneCaster()) {
+        // Prayer-based traditions (Divine, Nature) need no starting spellbook -- they pray for their
+        // spells fresh, same as Cleric today. Map.of(...) is null-hostile, so the tradition() == null
+        // (non-caster) case must be checked before ever calling .get on it.
+        Spell.Tradition tradition = characterClass.tradition();
+        List<String> pool = tradition == null ? null : STARTING_SPELLBOOK_SPELLS.get(tradition);
+        if (pool != null) {
             List<String> spellbook = new ArrayList<>();
-            spellbook.add("Read Magic");
-            spellbook.add(STARTING_ARCANE_SPELLS.get(dice.d(STARTING_ARCANE_SPELLS.size()) - 1));
+            if (characterClass.isArcaneCaster()) {
+                spellbook.add("Read Magic");
+            }
+            spellbook.add(pool.get(dice.d(pool.size()) - 1));
             c.setSpellbook(spellbook);
         }
 
@@ -128,6 +152,43 @@ public class CharacterFactory {
                 c.setArmor(Armor.LEATHER);
                 setWeapon(c, "Short sword", new DamageRoll(1, 6));
                 gear.add("Sling & 30 stones");
+            }
+            // gygax75-rules custom classes.
+            case BARBARIAN, HALF_ORC -> {
+                c.setArmor(Armor.CHAIN_MAIL);
+                c.setShield(true);
+                setWeapon(c, "Sword", new DamageRoll(1, 8));
+                gear.add("Dagger");
+                gear.add("Sling & 30 stones");
+            }
+            case DRUID -> {
+                c.setArmor(Armor.NONE); // no metal armor or shield -- a wooden shield isn't modeled separately
+                setWeapon(c, "Dagger", new DamageRoll(1, 4)); // one of the druid's few allowed weapons
+                gear.add("Sling & 30 stones");
+                gear.add("Holy symbol (wooden)"); // the rules' harvested mistletoe sprig
+            }
+            case KNIGHT -> {
+                c.setArmor(Armor.CHAIN_MAIL);
+                c.setShield(true);
+                setWeapon(c, "Sword", new DamageRoll(1, 8));
+                gear.add("Dagger");
+                // No missile weapon: knights regard these as dishonorable.
+            }
+            case WARDEN -> {
+                c.setArmor(Armor.LEATHER); // no plate -- needs stealth
+                setWeapon(c, "Sword", new DamageRoll(1, 8));
+                gear.add("Short bow & 20 arrows");
+                gear.add("Dagger");
+            }
+            case GNOME -> {
+                c.setArmor(Armor.LEATHER);
+                setWeapon(c, "Short sword", new DamageRoll(1, 6));
+                gear.add("Sling & 30 stones");
+            }
+            case WOOD_ELF -> {
+                c.setArmor(Armor.LEATHER); // no armor heavier than leather
+                setWeapon(c, "Sword", new DamageRoll(1, 8));
+                gear.add("Short bow & 20 arrows");
             }
         }
         // Common kit every delver carries (see Character.torches for the light supply, tracked as a

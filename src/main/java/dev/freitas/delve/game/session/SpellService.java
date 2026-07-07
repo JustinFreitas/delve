@@ -32,24 +32,25 @@ public class SpellService {
 
     /** Spells this character could prepare (spellbook for arcane casters; the full list for clerics). */
     public List<Spell> available(Character c) {
-        if (!SpellTables.isCaster(c.getCharacterClass())) {
+        Spell.Tradition tradition = SpellTables.tradition(c.getCharacterClass());
+        if (tradition == null) {
             return List.of();
         }
-        Spell.Tradition tradition = SpellTables.tradition(c.getCharacterClass());
-        if (tradition == Spell.Tradition.DIVINE) {
-            List<Spell> divine = new ArrayList<>();
+        // Divine and Nature casters pray for their spells -- the full list is always "available" to
+        // prepare from. Arcane and Illusion casters carry a spellbook -- only what's written in it.
+        if (tradition == Spell.Tradition.DIVINE || tradition == Spell.Tradition.NATURE) {
+            List<Spell> prayed = new ArrayList<>();
             for (Spell s : Spell.values()) {
-                if (s.tradition() == Spell.Tradition.DIVINE) {
-                    divine.add(s);
+                if (s.tradition() == tradition) {
+                    prayed.add(s);
                 }
             }
-            return divine;
+            return prayed;
         }
-        // Arcane: only what is written in the spellbook.
         List<Spell> known = new ArrayList<>();
         for (String name : c.getSpellbook()) {
             Spell s = Spell.parse(name);
-            if (s != null && s.tradition() == Spell.Tradition.ARCANE && !known.contains(s)) {
+            if (s != null && s.tradition() == tradition && !known.contains(s)) {
                 known.add(s);
             }
         }

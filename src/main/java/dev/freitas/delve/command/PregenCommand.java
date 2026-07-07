@@ -30,8 +30,12 @@ public class PregenCommand extends Command {
         String[] tokens = ctx.getArgumentText().trim().split("\\s+");
         CharacterClass characterClass = tokens.length > 0 ? CharacterClass.parse(tokens[0]) : null;
         if (characterClass == null) {
+            String classNames = java.util.Arrays.stream(CharacterClass.values())
+                    .map(c -> c.displayName().toLowerCase())
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("");
             ctx.reply("Usage: `" + ctx.getPrefix() + "pregen <class> [level] [name]`. "
-                    + "Classes: cleric, fighter, magic-user, thief, dwarf, elf, halfling.");
+                    + "Classes: " + classNames + ".");
             return;
         }
 

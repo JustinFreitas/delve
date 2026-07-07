@@ -10,21 +10,36 @@ import java.util.Map;
 public final class Advancement {
 
     // XP required to *be* a given level (cumulative). Index 0 = level 1 (0 XP).
-    private static final Map<CharacterClass, int[]> XP = Map.of(
-            CharacterClass.CLERIC, new int[] {
-                0, 1500, 3000, 6000, 12000, 25000, 50000, 100000, 200000, 300000, 400000, 500000, 600000, 700000},
-            CharacterClass.FIGHTER, new int[] {
-                0, 2000, 4000, 8000, 16000, 32000, 64000, 120000, 240000, 360000, 480000, 600000, 720000, 840000},
-            CharacterClass.MAGIC_USER, new int[] {
-                0, 2500, 5000, 10000, 20000, 40000, 80000, 150000, 300000, 450000, 600000, 750000, 900000, 1050000},
-            CharacterClass.THIEF, new int[] {
-                0, 1200, 2400, 4800, 9600, 20000, 40000, 80000, 160000, 280000, 400000, 520000, 640000, 760000},
-            CharacterClass.DWARF, new int[] {
-                0, 2200, 4400, 8800, 17000, 35000, 70000, 140000, 270000, 400000, 530000, 660000},
-            CharacterClass.ELF, new int[] {
-                0, 4000, 8000, 16000, 32000, 64000, 120000, 250000, 400000, 600000},
-            CharacterClass.HALFLING, new int[] {
-                0, 2000, 4000, 8000, 16000, 32000, 64000, 120000});
+    private static final Map<CharacterClass, int[]> XP = Map.ofEntries(
+            Map.entry(CharacterClass.CLERIC, new int[] {
+                0, 1500, 3000, 6000, 12000, 25000, 50000, 100000, 200000, 300000, 400000, 500000, 600000, 700000}),
+            Map.entry(CharacterClass.FIGHTER, new int[] {
+                0, 2000, 4000, 8000, 16000, 32000, 64000, 120000, 240000, 360000, 480000, 600000, 720000, 840000}),
+            Map.entry(CharacterClass.MAGIC_USER, new int[] {
+                0, 2500, 5000, 10000, 20000, 40000, 80000, 150000, 300000, 450000, 600000, 750000, 900000, 1050000}),
+            Map.entry(CharacterClass.THIEF, new int[] {
+                0, 1200, 2400, 4800, 9600, 20000, 40000, 80000, 160000, 280000, 400000, 520000, 640000, 760000}),
+            Map.entry(CharacterClass.DWARF, new int[] {
+                0, 2200, 4400, 8800, 17000, 35000, 70000, 140000, 270000, 400000, 530000, 660000}),
+            Map.entry(CharacterClass.ELF, new int[] {
+                0, 4000, 8000, 16000, 32000, 64000, 120000, 250000, 400000, 600000}),
+            Map.entry(CharacterClass.HALFLING, new int[] {
+                0, 2000, 4000, 8000, 16000, 32000, 64000, 120000}),
+            // gygax75-rules custom classes.
+            Map.entry(CharacterClass.BARBARIAN, new int[] {
+                0, 2500, 5000, 10000, 18500, 37000, 85000, 140000, 270000, 400000, 530000, 660000, 790000, 920000}),
+            Map.entry(CharacterClass.DRUID, new int[] {
+                0, 2000, 4000, 7500, 12500, 20000, 35000, 60000, 90000, 125000, 200000, 300000, 750000, 1500000}),
+            Map.entry(CharacterClass.KNIGHT, new int[] {
+                0, 2500, 5000, 10000, 18500, 37000, 85000, 140000, 270000, 400000, 530000, 660000, 790000, 920000}),
+            Map.entry(CharacterClass.WARDEN, new int[] {
+                0, 2000, 4000, 8000, 16000, 32000, 64000, 120000, 240000, 360000, 480000, 600000, 720000, 840000}),
+            Map.entry(CharacterClass.GNOME, new int[] {
+                0, 2000, 4000, 8000, 16000, 32000, 64000, 120000}),
+            Map.entry(CharacterClass.HALF_ORC, new int[] {
+                0, 1800, 3600, 7000, 14000, 28000, 60000, 120000}),
+            Map.entry(CharacterClass.WOOD_ELF, new int[] {
+                0, 3000, 6000, 12000, 24000, 48000, 100000, 200000, 350000, 500000}));
 
     private Advancement() {}
 

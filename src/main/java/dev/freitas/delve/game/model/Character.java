@@ -73,9 +73,28 @@ public class Character implements Combatant, Advanceable {
 
     public Character() {}
 
-    /** Effective descending Armor Class: armor base, improved by a shield and by the DEX modifier. */
+    /** Effective descending Armor Class: armor base, improved by a shield, the DEX modifier, and (for a
+        Barbarian) gygax75-rules' "Agile Fighting" level-scaled bonus (+1 at 4th, +2 at 6th, +3 at 8th,
+        +4 at 10th — subtracted here since lower is better in descending AC). */
     public int armorClass() {
-        return armor.baseArmorClass() - (shield ? 1 : 0) - abilities.modifier(Ability.DEX);
+        int ac = armor.baseArmorClass() - (shield ? 1 : 0) - abilities.modifier(Ability.DEX);
+        if (characterClass == CharacterClass.BARBARIAN) {
+            ac -= barbarianAgileFightingBonus();
+        }
+        return ac;
+    }
+
+    private int barbarianAgileFightingBonus() {
+        if (level >= 10) {
+            return 4;
+        } else if (level >= 8) {
+            return 3;
+        } else if (level >= 6) {
+            return 2;
+        } else if (level >= 4) {
+            return 1;
+        }
+        return 0;
     }
 
     /** Ascending AC equivalent (AC asc = 19 - AC desc), shown on the sheet for readability. */
@@ -124,11 +143,13 @@ public class Character implements Combatant, Advanceable {
         return abilities.modifier(Ability.STR);
     }
 
-    /** Missile to-hit modifier: DEX modifier. */
+    /** Missile to-hit modifier: DEX modifier, plus gygax75-rules' +1 "keen coordination" bonus for a
+        Wood Elf. */
     @Override
     @JsonIgnore
     public int missileToHitModifier() {
-        return abilities.modifier(Ability.DEX);
+        int mod = abilities.modifier(Ability.DEX);
+        return characterClass == CharacterClass.WOOD_ELF ? mod + 1 : mod;
     }
 
     /** Melee damage modifier: STR modifier (no ability bonus to missile damage in B/X). */

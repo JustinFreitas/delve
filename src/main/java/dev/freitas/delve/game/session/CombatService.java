@@ -454,8 +454,8 @@ public class CombatService {
                         slept++;
                     }
                 }
-                result.add(who + " " + (secondPerson ? "cast" : "casts") + " **Sleep** — " + slept
-                        + " enemy" + (slept == 1 ? "" : " enemies")
+                result.add(who + " " + (secondPerson ? "cast" : "casts") + " **" + spell.displayName() + "** — "
+                        + slept + " enemy" + (slept == 1 ? "" : " enemies")
                         + " collapse" + (slept == 1 ? "s" : "") + " into helpless slumber.");
             }
             case HEAL -> {
@@ -494,10 +494,11 @@ public class CombatService {
                 : (secondPerson ? "your " + attacker.getMainWeapon().toLowerCase() : attacker.getMainWeapon().toLowerCase());
         DamageRoll damageRoll = fallbackDagger ? FALLBACK_DAGGER : attacker.getMainWeaponDamage();
 
-        // Backstab: a Thief attacking while the monsters are still flat-footed gets +4 to hit and
-        // double damage — the classic B/X trigger, reusing the existing surprise flags instead of
-        // needing a separate flanking/facing concept.
-        boolean backstab = attacker.getCharacterClass() == CharacterClass.THIEF && encounter.isMonstersSurprised();
+        // Backstab: a Thief (or, per gygax75-rules, a Half-Orc) attacking while the monsters are still
+        // flat-footed gets +4 to hit and double damage — the classic B/X trigger, reusing the existing
+        // surprise flags instead of needing a separate flanking/facing concept.
+        boolean backstab = (attacker.getCharacterClass() == CharacterClass.THIEF
+                || attacker.getCharacterClass() == CharacterClass.HALF_ORC) && encounter.isMonstersSurprised();
         // Two-weapon fighting: a flat +1 to attack, no extra attack or damage. PC-only — retainers have
         // no way to acquire an off-hand weapon.
         boolean dualWielding = isPlayer && ((Character) attacker).getOffHandWeapon() != null;

@@ -64,6 +64,15 @@ public class RetainerFactory {
                     "Short bow", new DamageRoll(1, 6));
             case HALFLING -> new Equipment(Armor.LEATHER, false, "Short sword", new DamageRoll(1, 6),
                     "Sling", SLING_DAMAGE);
+            // gygax75-rules custom classes.
+            case BARBARIAN, HALF_ORC -> new Equipment(Armor.CHAIN_MAIL, true, "Sword", new DamageRoll(1, 8),
+                    "Sling", SLING_DAMAGE);
+            case DRUID -> new Equipment(Armor.NONE, false, "Dagger", new DamageRoll(1, 4), "Sling", SLING_DAMAGE);
+            case KNIGHT -> new Equipment(Armor.CHAIN_MAIL, true, "Sword", new DamageRoll(1, 8), null, null);
+            case WARDEN, WOOD_ELF -> new Equipment(Armor.LEATHER, false, "Sword", new DamageRoll(1, 8),
+                    "Short bow", new DamageRoll(1, 6));
+            case GNOME -> new Equipment(Armor.LEATHER, false, "Short sword", new DamageRoll(1, 6),
+                    "Sling", SLING_DAMAGE);
         };
     }
 

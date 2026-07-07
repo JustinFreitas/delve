@@ -116,8 +116,8 @@ public class GameFacade {
         disturbing an in-progress delve. */
     public ActionResult rollCharacter(long userId, String classToken, String name) {
         CharacterClass cls = CharacterClass.parse(classToken);
-        if (cls == null) {
-            return fail(userId, "Unknown class. Choose: cleric, fighter, magic-user, thief, dwarf, elf, halfling.");
+        if (cls == null || !gameProps.isClassEnabled(cls)) {
+            return fail(userId, "Unknown class. Choose: " + enabledClassNames() + ".");
         }
         AbilityScores abilities = AbilityScores.roll(dice);
         if (!cls.meetsRequirements(abilities)) {
@@ -413,8 +413,8 @@ public class GameFacade {
             return fail(save, "Your Charisma supports at most " + max + " retainers.");
         }
         CharacterClass cls = CharacterClass.parse(classToken);
-        if (cls == null) {
-            return fail(save, "Unknown class for the retainer.");
+        if (cls == null || !gameProps.isClassEnabled(cls)) {
+            return fail(save, "Unknown class for the retainer. Choose: " + enabledClassNames() + ".");
         }
         int fee = gameProps.getRetainerHiringFee();
         if (pc.getGold() < fee) {
@@ -422,6 +422,10 @@ public class GameFacade {
         }
         String hireName = blankToNull(name) != null ? name.trim() : cls.displayName() + " hireling";
         int loyalty = RetainerRules.baseLoyalty(pc.getAbilities().score(Ability.CHA));
+        // gygax75-rules: a Half-Orc's retainers (other than fellow Half-Orcs) start at -1 loyalty.
+        if (pc.getCharacterClass() == CharacterClass.HALF_ORC && cls != CharacterClass.HALF_ORC) {
+            loyalty -= 1;
+        }
         Retainer retainer = retainerFactory.create(hireName, cls, 1, loyalty);
         retainer.setOwner(pc.getName());
         pc.setGold(pc.getGold() - fee);
@@ -656,6 +660,17 @@ public class GameFacade {
             return save.getCharacter();
         }
         return save.resolve(pcName) instanceof Character c ? c : null;
+    }
+
+    /** Every class a player may currently roll/hire: the 7 standard classes, plus whichever gygax75
+        custom ones this DM has enabled (see {@link GameProps#isClassEnabled}) — the web-layer message
+        text's equivalent of {@code RollCharacterCommand}/{@code HireCommand}'s dynamic class lists. */
+    private String enabledClassNames() {
+        return java.util.Arrays.stream(CharacterClass.values())
+                .filter(gameProps::isClassEnabled)
+                .map(c -> c.displayName().toLowerCase())
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("");
     }
 
     public ActionResult undo(long userId) {

@@ -14,9 +14,9 @@ public final class CombatTables {
      */
     public static int classThac0(CharacterClass characterClass, int level) {
         return switch (characterClass) {
-            case FIGHTER, DWARF, ELF, HALFLING -> fighterThac0(level);
-            case CLERIC, THIEF -> clericThiefThac0(level);
-            case MAGIC_USER -> magicUserThac0(level);
+            case FIGHTER, DWARF, ELF, HALFLING, BARBARIAN, KNIGHT, WARDEN, WOOD_ELF -> fighterThac0(level);
+            case CLERIC, THIEF, DRUID, HALF_ORC -> clericThiefThac0(level);
+            case MAGIC_USER, GNOME -> magicUserThac0(level);
         };
     }
 
