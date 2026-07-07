@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class HireCommand extends Command {
 
-    static final int HIRING_FEE = 25; // gp advance paid up front
+    public static int HIRING_FEE = 25; // gp advance paid up front
     private static final List<String> NAMES = List.of(
             "Aldo", "Bryn", "Cora", "Doran", "Esna", "Fendrel", "Gwen", "Holt",
             "Isolde", "Jorath", "Kael", "Lyra", "Mott", "Nessa", "Orin", "Petra");
@@ -57,10 +57,11 @@ public class HireCommand extends Command {
     private final RetainerFactory retainerFactory;
     private final Dice dice;
 
-    public HireCommand(RetainerFactory retainerFactory, Dice dice) {
+    public HireCommand(RetainerFactory retainerFactory, Dice dice, dev.freitas.delve.config.GameProps gameProps) {
         super("hire", "recruit");
         this.retainerFactory = retainerFactory;
         this.dice = dice;
+        HIRING_FEE = gameProps.getRetainerHiringFee();
     }
 
     @Override

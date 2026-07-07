@@ -73,7 +73,7 @@ public class CastCommand extends Command {
 
         ExplorationResult result = save.getSession().getState() == SessionState.IN_COMBAT
                 ? combat.castRound(save, actorToken, spell, target)
-                : spells.castOutOfCombat(actor, spell);
+                : spells.castOutOfCombat(actor, spell, save.getSession());
         ctx.getBeans().gameState.save(userId, save);
         ctx.reply(result.text());
     }

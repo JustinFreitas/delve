@@ -3,6 +3,7 @@ package dev.freitas.delve.command;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.freitas.delve.game.engine.LodgingTier;
+import dev.freitas.delve.config.GameProps;
 import dev.freitas.delve.game.session.TownService;
 import org.junit.jupiter.api.Test;
 
@@ -10,7 +11,7 @@ import org.junit.jupiter.api.Test;
     established pattern of testing small extracted pure logic directly (see {@code BuyCommandTest}). */
 class TownCommandTest {
 
-    private final TownCommand townCommand = new TownCommand(new TownService(null, null, null));
+    private final TownCommand townCommand = new TownCommand(new TownService(null, null, null, new GameProps()));
 
     @Test
     void resolvesLodgingTiersCaseInsensitively() {

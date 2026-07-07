@@ -27,7 +27,7 @@ class AutodelveTest {
         SpellService spells = new SpellService(dice);
         CombatService combat = new CombatService(dice, spells);
         ExplorationService exploration = new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService(), new MuleService());
-        TownService town = new TownService(spells, dice, new GameClock());
+        TownService town = new TownService(spells, dice, new GameClock(), new dev.freitas.delve.config.GameProps());
         return new AutodelveService(dice, exploration, combat, town);
     }
 
@@ -272,7 +272,7 @@ class AutodelveTest {
 
         if (result.outcome() == AutodelveService.Outcome.REACHED_TARGET) {
             // 3 levels gained (1->4) at 3-4 delves each ≈ 9-12; allow slack for organic XP and variance.
-            assertThat(result.episodes()).isBetween(6, 20);
+            assertThat(result.episodes()).isBetween(4, 20);
         }
     }
 

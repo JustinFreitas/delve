@@ -98,9 +98,15 @@ public class LightingService {
         String replacement = pickEligibleBearer(save);
         session.setLightBearer(replacement);
         if (replacement == null) {
-            session.setActiveLight(null);
-            session.setInDarkness(true);
-            result.add("No one has a free hand for the light anymore — darkness falls!");
+            if (session.isSpellLightActive()) {
+                session.setActiveLight(null);
+                session.setInDarkness(false);
+                result.add("No one has a free hand for the light anymore, but magical light continues to illuminate your way.");
+            } else {
+                session.setActiveLight(null);
+                session.setInDarkness(true);
+                result.add("No one has a free hand for the light anymore — darkness falls!");
+            }
         } else if (token != null) {
             result.add(displayName(save.resolve(replacement)) + " takes up the light.");
         }
@@ -110,7 +116,7 @@ public class LightingService {
         dark) — called once per dungeon turn, after {@link #reconcileBearer}. */
     public void tickFuel(SaveGame save, ExplorationResult result) {
         GameSession session = save.getSession();
-        if (session.isInDarkness() || session.getActiveLight() == null) {
+        if (session.getActiveLight() == null) {
             return;
         }
         session.setLightTurnsRemaining(session.getLightTurnsRemaining() - 1);
@@ -126,11 +132,21 @@ public class LightingService {
                     ? "_Your torch gutters out; you light another (" + pc.getTorches() + " left)._"
                     : "_Your lantern's oil runs dry; you refill it (" + pc.getOilFlasks() + " flasks left)._");
         } else {
-            session.setActiveLight(null);
-            session.setInDarkness(true);
-            result.add(type == LightSource.TORCH
-                    ? "**Your last torch burns out — you are plunged into darkness!**"
-                    : "**Your last flask of oil runs dry — you are plunged into darkness!**");
+            if (session.isSpellLightActive()) {
+                session.setActiveLight(null);
+                session.setLightBearer(null);
+                session.setInDarkness(false);
+                result.add(type == LightSource.TORCH
+                        ? "**Your last torch burns out, but magical light continues to illuminate your way.**"
+                        : "**Your last flask of oil runs dry, but magical light continues to illuminate your way.**");
+            } else {
+                session.setActiveLight(null);
+                session.setLightBearer(null);
+                session.setInDarkness(true);
+                result.add(type == LightSource.TORCH
+                        ? "**Your last torch burns out — you are plunged into darkness!**"
+                        : "**Your last flask of oil runs dry — you are plunged into darkness!**");
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 package dev.freitas.delve.api.dto;
 
 import dev.freitas.delve.game.engine.MuleRules;
+import dev.freitas.delve.game.model.ActiveEffect;
 import dev.freitas.delve.game.model.Mule;
 import dev.freitas.delve.game.model.SaveGame;
 import java.util.List;
@@ -21,9 +22,13 @@ public record StateSnapshot(
         boolean inCombat,
         Integer dungeonLevel,
         Integer dungeonTurn,
+        Integer turnsSinceRest,
+        List<ActiveEffectSummary> activeEffects,
         List<CharacterSummary> characters,
         List<RetainerSummary> retainers,
         MuleSummary mule) {
+
+    public record ActiveEffectSummary(String label, int turnsRemaining, String ownerPcName) {}
 
     public record CharacterSummary(
             String name, String characterClass, int level, int currentHp, int maxHp, boolean alive,
@@ -37,13 +42,16 @@ public record StateSnapshot(
 
     public static StateSnapshot of(SaveGame save) {
         if (save == null || !save.hasCharacter()) {
-            return new StateSnapshot(false, null, null, null, null, null, "IN_TOWN", false, false, null, null,
-                    List.of(), List.of(), null);
+            return new StateSnapshot(false, null, null, null, null, null, "IN_TOWN", false, false, null, null, null,
+                    List.of(), List.of(), List.of(), null);
         }
         var c = save.getCharacter();
         var session = save.getSession();
         boolean inDungeon = session.isInDungeon();
 
+        List<ActiveEffectSummary> activeEffects = session.getActiveEffects().stream()
+                .map(e -> new ActiveEffectSummary(e.getLabel(), e.getTurnsRemaining(), e.getOwnerPcName()))
+                .toList();
         List<CharacterSummary> characters = save.getCharacters().stream()
                 .map(pc -> new CharacterSummary(pc.getName(), pc.getCharacterClass().displayName(), pc.getLevel(),
                         pc.getCurrentHp(), pc.getMaxHp(), pc.isAlive(), pc == c, pc.getGold(), pc.getBankedGold()))
@@ -68,6 +76,8 @@ public record StateSnapshot(
                 session.getState().name().equals("IN_COMBAT"),
                 inDungeon ? session.getCurrentLevel() + 1 : null,
                 inDungeon ? session.getDungeonTurn() : null,
+                inDungeon ? session.getTurnsSinceRest() : null,
+                activeEffects,
                 characters,
                 retainers,
                 mule);

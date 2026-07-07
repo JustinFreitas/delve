@@ -334,6 +334,153 @@ class DungeonExplorationTest {
     }
 
     @Test
+    void fatigueWarningsAreLoggedOnTurnFiveAndSix() {
+        Dice dice = new Dice(new Random(23));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
+        SaveGame save = twoRoomSave(dice, 9);
+
+        for (int i = 1; i <= 4; i++) {
+            var res = service.move(save, (i % 2 != 0) ? Direction.EAST : Direction.WEST);
+            assertThat(res.text()).doesNotContain("**Warning**");
+            assertThat(res.text()).doesNotContain("exhausted");
+            save.getSession().setState(SessionState.EXPLORING);
+            save.getSession().setCombat(null);
+            for (Room room : save.getSession().currentLevel().getRooms().values()) {
+                room.setContent(ContentType.EMPTY);
+                room.setMonsterName(null);
+                room.setMonsterCount(0);
+                room.setCleared(true);
+            }
+        }
+
+        // Turn 5
+        var res5 = service.move(save, Direction.EAST);
+        assertThat(res5.text()).contains("**Warning**: The party has traveled 5 turns without resting. You must REST next turn or become fatigued.");
+        save.getSession().setState(SessionState.EXPLORING);
+        save.getSession().setCombat(null);
+        for (Room room : save.getSession().currentLevel().getRooms().values()) {
+            room.setContent(ContentType.EMPTY);
+            room.setMonsterName(null);
+            room.setMonsterCount(0);
+            room.setCleared(true);
+        }
+
+        // Turn 6
+        var res6 = service.move(save, Direction.WEST);
+        assertThat(res6.text()).contains("**The party is exhausted!** Skipping mandatory rest incurs a -1 penalty to hit and damage rolls until you rest.");
+    }
+
+    @Test
+    void activeEffectsTickDownAndExpire() {
+        Dice dice = new Dice(new Random(23));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
+        SpellService spells = new SpellService(dice);
+        SaveGame save = twoRoomSave(dice, 9);
+
+        // Prepare Shield spell on player character
+        var c = save.getCharacter();
+        c.getMemorizedSpells().add(dev.freitas.delve.game.engine.Spell.SHIELD.name());
+
+        // Cast Shield spell out of combat
+        var castRes = spells.castOutOfCombat(c, dev.freitas.delve.game.engine.Spell.SHIELD, save.getSession());
+        assertThat(castRes.isSuccess()).isTrue();
+        assertThat(save.getSession().getActiveEffects()).hasSize(1);
+
+        var effect = save.getSession().getActiveEffects().get(0);
+        assertThat(effect.getLabel()).isEqualTo("Shield");
+        assertThat(effect.getTurnsRemaining()).isEqualTo(2); // Shield duration is 2 turns
+
+        // Advance Turn 1
+        var res1 = service.move(save, Direction.EAST);
+        assertThat(res1.text()).contains("⚠️ **Warning**: The effect of **Shield** on Tester is flickering and will soon end.");
+        assertThat(effect.getTurnsRemaining()).isEqualTo(1);
+
+        // Reset room encounters to avoid combat block
+        save.getSession().setState(SessionState.EXPLORING);
+        save.getSession().setCombat(null);
+        for (Room room : save.getSession().currentLevel().getRooms().values()) {
+            room.setContent(ContentType.EMPTY);
+            room.setMonsterName(null);
+            room.setMonsterCount(0);
+            room.setCleared(true);
+        }
+
+        // Advance Turn 2
+        var res2 = service.move(save, Direction.WEST);
+        assertThat(res2.text()).contains("✨ The effect of **Shield** on Tester has ended.");
+        assertThat(save.getSession().getActiveEffects()).isEmpty();
+    }
+
+    @Test
+    void lightSpellProvidesRedundancyAndEndsInDarkness() {
+        Dice dice = new Dice(new Random(23));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
+        SpellService spells = new SpellService(dice);
+        SaveGame save = twoRoomSave(dice, 9);
+        GameSession session = save.getSession();
+
+        // 1. Cast Light out of combat - should make inDarkness false
+        var c = save.getCharacter();
+        c.getMemorizedSpells().add(dev.freitas.delve.game.engine.Spell.LIGHT.name());
+        var res = spells.castOutOfCombat(c, dev.freitas.delve.game.engine.Spell.LIGHT, session);
+        assertThat(res.isSuccess()).isTrue();
+        assertThat(session.isSpellLightActive()).isTrue();
+        assertThat(session.isInDarkness()).isFalse();
+
+        // 2. Extinguish the physical light source (set activeLight to null, turns to 0)
+        session.setActiveLight(null);
+        session.setLightTurnsRemaining(0);
+        session.setLightBearer(null);
+
+        // 3. Move and tick turn: physical light is gone, but Light spell is active, so inDarkness remains false
+        var moveRes1 = service.move(save, Direction.EAST);
+        assertThat(moveRes1.text()).doesNotContain("darkness falls");
+        assertThat(session.isInDarkness()).isFalse();
+
+        // 4. Manually set Light turnsRemaining to 1 so it expires on the next turn
+        var effect = session.getActiveEffects().get(0);
+        effect.setTurnsRemaining(1);
+
+        // Reset room encounters to avoid combat block
+        session.setState(SessionState.EXPLORING);
+        session.setCombat(null);
+        for (Room room : session.currentLevel().getRooms().values()) {
+            room.setContent(ContentType.EMPTY);
+            room.setMonsterName(null);
+            room.setMonsterCount(0);
+            room.setCleared(true);
+        }
+
+        // 5. Move and tick: Light spell expires, recheckLightDarkness triggers, plunged into darkness!
+        var moveRes2 = service.move(save, Direction.WEST);
+        assertThat(moveRes2.text()).contains("The magical light fades, and you are plunged into darkness");
+        assertThat(session.isInDarkness()).isTrue();
+    }
+
+    @Test
+    void failedDoorBashGeneratesLoudNoiseWarning() {
+        Dice dice = new Dice(new Random(23));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
+        SaveGame save = twoRoomSave(dice, 9);
+        GameSession session = save.getSession();
+
+        // Set exit to east to STUCK
+        Exit exit = session.currentRoom().getExits().get(Direction.EAST);
+        exit.setDoor(DoorState.STUCK);
+
+        // Set player STR low so they fail the door bash
+        save.getCharacter().getAbilities().setStrength(3); // -3 STR modifier, threshold 1-in-6
+
+        // Try to open stuck door. If we fail, it will be loud
+        var res = service.open(save, Direction.EAST);
+        assertThat(res.text()).contains("You throw your shoulder against the stuck door...");
+        if (exit.getDoor() == DoorState.STUCK) {
+            // Door held fast! This should have printed the Loud Noise warning
+            assertThat(res.text()).contains("**Loud Noise!** The noise echoing through the halls might attract unwanted attention");
+        }
+    }
+
+    @Test
     void largerPartiesFaceMoreFrequentWanderingMonsterChecks() {
         int soloTriggers = 0;
         int largePartyTriggers = 0;

@@ -1,5 +1,7 @@
 package dev.freitas.delve.api;
 
+import dev.freitas.delve.config.GameProps;
+
 import dev.freitas.delve.api.dto.ActionResult;
 import dev.freitas.delve.api.dto.StateSnapshot;
 import dev.freitas.delve.command.CharacterSheets;
@@ -47,7 +49,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class GameFacade {
 
-    private static final int HIRING_FEE = 25;
     private static final DamageRoll HEALING_POTION = new DamageRoll(2, 4, 2);
 
     private final GameStateService gameState;
@@ -62,6 +63,7 @@ public class GameFacade {
     private final MuleFactory muleFactory;
     private final BankService bankService;
     private final Dice dice;
+    private final GameProps gameProps;
 
     public GameFacade(
             GameStateService gameState,
@@ -75,7 +77,8 @@ public class GameFacade {
             MuleService muleService,
             MuleFactory muleFactory,
             BankService bankService,
-            Dice dice) {
+            Dice dice,
+            GameProps gameProps) {
         this.gameState = gameState;
         this.exploration = exploration;
         this.combat = combat;
@@ -88,6 +91,7 @@ public class GameFacade {
         this.muleFactory = muleFactory;
         this.bankService = bankService;
         this.dice = dice;
+        this.gameProps = gameProps;
     }
 
     // --- state & character ------------------------------------------------
@@ -250,6 +254,17 @@ public class GameFacade {
         return toResult(save, result);
     }
 
+    public ActionResult rest(long userId) {
+        SaveGame save = gameState.load(userId);
+        ActionResult guard = requireDelving(save);
+        if (guard != null) {
+            return guard;
+        }
+        ExplorationResult result = exploration.rest(save);
+        gameState.save(userId, save);
+        return toResult(save, result);
+    }
+
     public ActionResult open(long userId, String direction) {
         SaveGame save = gameState.load(userId);
         ActionResult guard = requireDelving(save);
@@ -316,7 +331,7 @@ public class GameFacade {
             if (actor == null) {
                 return fail(save, "No character named '" + pcName + "'.");
             }
-            result = spells.castOutOfCombat(actor, spell);
+            result = spells.castOutOfCombat(actor, spell, save.getSession());
         }
         gameState.save(userId, save);
         return toResult(save, result);
@@ -401,14 +416,15 @@ public class GameFacade {
         if (cls == null) {
             return fail(save, "Unknown class for the retainer.");
         }
-        if (pc.getGold() < HIRING_FEE) {
-            return fail(save, "You need a " + HIRING_FEE + " gp advance; you have " + pc.getGold() + ".");
+        int fee = gameProps.getRetainerHiringFee();
+        if (pc.getGold() < fee) {
+            return fail(save, "You need a " + fee + " gp advance; you have " + pc.getGold() + ".");
         }
         String hireName = blankToNull(name) != null ? name.trim() : cls.displayName() + " hireling";
         int loyalty = RetainerRules.baseLoyalty(pc.getAbilities().score(Ability.CHA));
         Retainer retainer = retainerFactory.create(hireName, cls, 1, loyalty);
         retainer.setOwner(pc.getName());
-        pc.setGold(pc.getGold() - HIRING_FEE);
+        pc.setGold(pc.getGold() - fee);
         save.getRetainers().add(retainer);
         gameState.save(userId, save);
         return ok(save, hireName + ", a level 1 " + cls.displayName() + ", joins you (" + retainer.getMaxHp()
@@ -640,6 +656,16 @@ public class GameFacade {
             return save.getCharacter();
         }
         return save.resolve(pcName) instanceof Character c ? c : null;
+    }
+
+    public ActionResult undo(long userId) {
+        SaveGame undone = gameState.undo(userId);
+        if (undone == null) {
+            SaveGame current = gameState.load(userId);
+            return fail(current, "No history available to undo.");
+        }
+        ExplorationResult res = ExplorationResult.of("🔮 **Time Rewound**: Rolled back the last action.");
+        return toResult(undone, res);
     }
 
     private ActionResult requireDelving(SaveGame save) {

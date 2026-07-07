@@ -1,5 +1,7 @@
 package dev.freitas.delve.game.session;
 
+import dev.freitas.delve.config.GameProps;
+
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.GameClock;
 import dev.freitas.delve.game.engine.LodgingTier;
@@ -28,7 +30,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class TownService {
 
-    private static final int RETAINER_UPKEEP = 10; // gp per retainer for a week in town
     private static final int DEFAULT_REST_DAYS = 7;
     private static final long DAY_MILLIS = 24L * 60 * 60 * 1000;
 
@@ -38,11 +39,13 @@ public class TownService {
     private final SpellService spells;
     private final Dice dice;
     private final GameClock clock;
+    private final GameProps gameProps;
 
-    public TownService(SpellService spells, Dice dice, GameClock clock) {
+    public TownService(SpellService spells, Dice dice, GameClock clock, GameProps gameProps) {
         this.spells = spells;
         this.dice = dice;
         this.clock = clock;
+        this.gameProps = gameProps;
     }
 
     /** As {@link #returnToTown(SaveGame, int)}, requesting the default (a full week). */
@@ -160,7 +163,7 @@ public class TownService {
                 if (owned.isEmpty()) {
                     continue;
                 }
-                int upkeep = owned.size() * RETAINER_UPKEEP;
+                int upkeep = owned.size() * gameProps.getRetainerUpkeep();
                 int paid = Math.min(upkeep, pc.getGold());
                 pc.setGold(pc.getGold() - paid);
                 result.add((solo ? "You pay " : pc.getName() + " pays ") + paid + " gp in retainer upkeep"

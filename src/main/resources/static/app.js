@@ -59,6 +59,44 @@ function renderState(s) {
   $("#state").innerHTML = parts.join("<br>");
   populatePcSelect(s.characters || []);
   renderMule(s.mule);
+
+  // Expose fatigue status (Phase 1)
+  const fatigueEl = $("#fatigue-indicator");
+  if (s.hasCharacter && s.inDungeon && s.turnsSinceRest !== null && s.turnsSinceRest !== undefined) {
+    if (s.turnsSinceRest >= 6) {
+      fatigueEl.innerHTML = `🔴 Fatigue: ${s.turnsSinceRest}/6 turns (Exhausted!)`;
+      fatigueEl.style.color = "#d98a8a";
+    } else if (s.turnsSinceRest === 5) {
+      fatigueEl.innerHTML = `⚠️ Fatigue: ${s.turnsSinceRest}/6 turns (Rest Recommended)`;
+      fatigueEl.style.color = "#c98a3b";
+    } else {
+      fatigueEl.innerHTML = `👣 Fatigue: ${s.turnsSinceRest}/6 turns`;
+      fatigueEl.style.color = "var(--muted)";
+    }
+    fatigueEl.classList.remove("hidden");
+  } else {
+    fatigueEl.classList.add("hidden");
+  }
+
+  // Render active effects (Phase 2)
+  const effectsContainer = $("#active-effects-container");
+  const effectsList = $("#active-effects-list");
+  if (s.hasCharacter && s.inDungeon && s.activeEffects && s.activeEffects.length > 0) {
+    effectsList.innerHTML = s.activeEffects.map(e => {
+      const owner = e.ownerPcName ? ` (on ${e.ownerPcName})` : "";
+      let turnsColor = "var(--muted)";
+      if (e.turnsRemaining === 1) {
+        turnsColor = "#c98a3b";
+      } else if (e.turnsRemaining <= 0) {
+        turnsColor = "#d98a8a";
+      }
+      return `<div style="margin-bottom: 0.2rem;">✨ <strong>${e.label}</strong>${owner}: <span style="color: ${turnsColor}; font-weight: bold;">${e.turnsRemaining} turns left</span></div>`;
+    }).join("");
+    effectsContainer.classList.remove("hidden");
+  } else {
+    effectsContainer.classList.add("hidden");
+    effectsList.innerHTML = "";
+  }
 }
 
 // Populates the PC switcher from every PC in the party; keeps the current selection if it's still a
@@ -146,7 +184,9 @@ function wire() {
   const pcTargeted = new Set(["attack", "quaff"]);
   const simple = { look: ["GET", "/api/delve/look"], search: ["POST", "/api/delve/search"],
     attack: ["POST", "/api/delve/attack"], flee: ["POST", "/api/delve/flee"],
-    quaff: ["POST", "/api/delve/quaff"], town: ["POST", "/api/delve/town"], party: ["GET", "/api/delve/party"] };
+    quaff: ["POST", "/api/delve/quaff"], rest: ["POST", "/api/delve/rest"],
+    town: ["POST", "/api/delve/town"], party: ["GET", "/api/delve/party"],
+    undo: ["POST", "/api/delve/undo"] };
   document.querySelectorAll("[data-action]").forEach((b) =>
     b.addEventListener("click", async () => {
       const [m, p] = simple[b.dataset.action];
@@ -234,6 +274,8 @@ async function sendCommand() {
     case "prepare": r = await api("POST", "/api/delve/prepare", { pc: selectedPc, spell: arg }); break;
     case "hire": { const [c, ...n] = rest; r = await api("POST", "/api/delve/hire", { pc: selectedPc, cls: c, name: n.join(" ") }); break; }
     case "dismiss": r = await api("POST", "/api/delve/dismiss", { pc: selectedPc, name: arg }); break;
+    case "rest": r = await api("POST", "/api/delve/rest"); break;
+    case "undo": case "rewind": r = await api("POST", "/api/delve/undo"); break;
     case "cast": {
       // last token may be a target number
       let target = null, spell = arg;
@@ -242,7 +284,7 @@ async function sendCommand() {
       r = await api("POST", "/api/delve/cast", { pc: selectedPc, spell, target }); break;
     }
     case "attack": r = await api("POST", "/api/delve/attack", { pc: selectedPc, target: arg ? Number(arg) : null }); break;
-    default: logEntry("Unknown command. Try: open <dir>, cast <spell> [n], prepare <spell>, hire <class> <name>, dismiss <name>.", true); return;
+    default: logEntry("Unknown command. Try: rest, open <dir>, cast <spell> [n], prepare <spell>, hire <class> <name>, dismiss <name>.", true); return;
   }
   applyResult(r);
 }
@@ -258,6 +300,10 @@ async function init() {
   wire();
   renderState(r.data);
   loadCharacter();
+  const adminRes = await api("GET", "/api/user/admin");
+  if (adminRes.ok && adminRes.data === true) {
+    $("#admin-panel").classList.remove("hidden");
+  }
   loadModules();
   logEntry("Welcome to delve. Roll a character (or pregen one), then Enter a dungeon.");
 }

@@ -38,6 +38,7 @@
             <button data-action="attack">Attack</button>
             <button data-action="flee">Flee</button>
             <button data-action="quaff">Quaff</button>
+            <button data-action="rest">Rest</button>
             <button data-action="town">Town</button>
             <button data-action="party">Party</button>
           </div>
@@ -49,7 +50,22 @@
       </div>
 
       <aside class="side">
-        <div class="panel" id="state-panel"><h3>Status</h3><div id="state"></div></div>
+        <div class="panel" id="state-panel">
+          <h3>Status</h3>
+          <div id="state"></div>
+          <div id="fatigue-indicator" style="margin-top: 0.5rem; font-weight: bold;"></div>
+          <div id="active-effects-container" style="margin-top: 0.5rem;" class="hidden">
+            <span class="k">Active Effects:</span>
+            <div id="active-effects-list" style="margin-left: 0.5rem; font-size: 0.9em; margin-top: 0.25rem;"></div>
+          </div>
+        </div>
+
+        <div class="panel hidden" id="admin-panel">
+          <h3>DM Tools</h3>
+          <div class="row">
+            <button data-action="undo" style="background-color: #5c3c5c; border-color: #7c4c7c;">🔮 Undo / Rewind</button>
+          </div>
+        </div>
 
         <div class="panel">
           <h3>Character</h3>

@@ -1,5 +1,7 @@
 package dev.freitas.delve.api;
 
+import dev.freitas.delve.config.GameProps;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.freitas.delve.api.dto.ActionResult;
@@ -66,14 +68,15 @@ class GameFacadeTest {
             new ExplorationService(dice, new DungeonGenerator(dice), combat, new LightingService(), new MuleService()),
             combat,
             spells,
-            new TownService(spells, dice, new GameClock()),
+            new TownService(spells, dice, new GameClock(), new GameProps()),
             new PregenService(dice, new CharacterFactory(dice), spells),
             new RetainerFactory(dice),
             new CharacterFactory(dice),
             new MuleService(),
             new MuleFactory(dice),
             new BankService(),
-            dice);
+            dice,
+            new GameProps());
 
     private static final long USER = 42L;
 

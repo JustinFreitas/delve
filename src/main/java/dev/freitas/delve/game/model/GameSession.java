@@ -2,6 +2,8 @@ package dev.freitas.delve.game.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import dev.freitas.delve.game.engine.LightSource;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The player's live dungeon run: where they are, what turn it is, and how much light remains. Stored
@@ -38,6 +40,9 @@ public class GameSession {
     /** Dungeon turns elapsed since the party last rested; resets to 0 on {@code rest} and when a
         delve begins. Six turns (one hour) without resting incurs a fatigue penalty. */
     private int turnsSinceRest;
+
+    /** Active timed status/spell effects in the turn loop. */
+    private List<ActiveEffect> activeEffects = new ArrayList<>();
 
     public GameSession() {}
 
@@ -157,5 +162,42 @@ public class GameSession {
     @JsonIgnore
     public boolean isFatigued() {
         return turnsSinceRest >= 6;
+    }
+
+    public List<ActiveEffect> getActiveEffects() {
+        return activeEffects;
+    }
+
+    public void setActiveEffects(List<ActiveEffect> activeEffects) {
+        this.activeEffects = activeEffects;
+    }
+
+    public void addEffect(String label, int turns, String ownerPcName) {
+        if (activeEffects == null) {
+            activeEffects = new ArrayList<>();
+        }
+        for (ActiveEffect effect : activeEffects) {
+            if (effect.getLabel().equalsIgnoreCase(label) &&
+                ((ownerPcName == null && effect.getOwnerPcName() == null) ||
+                 (ownerPcName != null && ownerPcName.equalsIgnoreCase(effect.getOwnerPcName())))) {
+                effect.setTurnsRemaining(turns);
+                return;
+            }
+        }
+        activeEffects.add(new ActiveEffect(label, turns, ownerPcName));
+    }
+
+    @JsonIgnore
+    public boolean isSpellLightActive() {
+        if (activeEffects == null) {
+            return false;
+        }
+        for (ActiveEffect effect : activeEffects) {
+            String label = effect.getLabel();
+            if (label.equalsIgnoreCase("Light") || label.equalsIgnoreCase("Light (Cleric)")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

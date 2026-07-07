@@ -29,4 +29,13 @@ class WebPropsTest {
         props.setAllowedUserIds(null);
         assertThat(props.isAllowed("123")).isTrue();
     }
+
+    @Test
+    void adminUserIdsConfigurationWorks() {
+        WebProps props = new WebProps();
+        props.setAdminUserIds(List.of("999", "888"));
+        assertThat(props.isAdmin("999")).isTrue();
+        assertThat(props.isAdmin("888")).isTrue();
+        assertThat(props.isAdmin("111")).isFalse();
+    }
 }

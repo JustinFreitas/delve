@@ -24,7 +24,7 @@ class LodgingTierTest {
     private static final long DAY_MILLIS = 24L * 60 * 60 * 1000;
 
     private final Dice dice = new Dice(new Random(91));
-    private final TownService town = new TownService(new SpellService(dice), dice, new GameClock());
+    private final TownService town = new TownService(new SpellService(dice), dice, new GameClock(), new dev.freitas.delve.config.GameProps());
 
     /** Backdates the save's last-real-visit clock so the real-time rest cap doesn't bind. */
     private static void allowRestDays(SaveGame save, int days) {
@@ -90,7 +90,7 @@ class LodgingTierTest {
         boolean deserted = false;
         for (int seed = 0; seed < 100 && !deserted; seed++) {
             Dice trialDice = new Dice(new Random(seed));
-            TownService trialTown = new TownService(new SpellService(trialDice), trialDice, new GameClock());
+            TownService trialTown = new TownService(new SpellService(trialDice), trialDice, new GameClock(), new dev.freitas.delve.config.GameProps());
             SaveGame save = new SaveGame();
             Character pc = bareCharacter("Hero", 1000);
             save.setCharacter(pc);

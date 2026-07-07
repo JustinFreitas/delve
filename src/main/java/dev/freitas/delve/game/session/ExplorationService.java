@@ -17,6 +17,7 @@ import dev.freitas.delve.game.model.ContentType;
 import dev.freitas.delve.game.model.Direction;
 import dev.freitas.delve.game.model.DoorState;
 import dev.freitas.delve.game.model.Dungeon;
+import dev.freitas.delve.game.model.ActiveEffect;
 import dev.freitas.delve.game.model.Exit;
 import dev.freitas.delve.game.model.GameSession;
 import dev.freitas.delve.game.model.MonsterDisposition;
@@ -26,6 +27,7 @@ import dev.freitas.delve.game.model.Room;
 import dev.freitas.delve.game.model.SaveGame;
 import dev.freitas.delve.game.model.SessionState;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -147,7 +149,7 @@ public class ExplorationService {
             result.add("The door swings shut behind you.");
         }
 
-        advanceTurn(save, result);
+        advanceTurn(save, result, false);
 
         maybePassiveRoomTrapSense(save, result);
         maybeSpringTrap(save, result);
@@ -174,7 +176,7 @@ public class ExplorationService {
         ExplorationResult result = new ExplorationResult();
         result.add(down ? "You descend the stairs, deeper into the dark." : "You climb the stairs.");
         result.add("Now on dungeon level " + (session.getCurrentLevel() + 1) + ".");
-        advanceTurn(save, result);
+        advanceTurn(save, result, false);
         result.add("");
         result.add(describeRoom(session));
         handleEncounter(save, result);
@@ -250,7 +252,7 @@ public class ExplorationService {
             result.add("You find nothing of interest.");
         }
         room.setSearched(true);
-        advanceTurn(save, result);
+        advanceTurn(save, result, false);
         handleEncounter(save, result);
         return result;
     }
@@ -352,7 +354,7 @@ public class ExplorationService {
                 } else {
                     result.add("It holds fast.");
                 }
-                advanceTurn(save, result); // forcing a door takes time and makes noise
+                advanceTurn(save, result, false, !forced); // forcing a door takes time and makes noise if it fails
                 return result;
             }
             case LOCKED -> {
@@ -371,7 +373,7 @@ public class ExplorationService {
                 } else {
                     result.add("You fumble with the lock, but it holds.");
                 }
-                advanceTurn(save, result); // picking a lock takes time, success or not
+                advanceTurn(save, result, false); // picking a lock takes time, success or not
                 return result;
             }
             case ONE_WAY -> {
@@ -413,7 +415,7 @@ public class ExplorationService {
         result.add(holdOpen
                 ? "You jam a spike under the door to the " + direction.lower() + ", wedging it open."
                 : "You jam a spike into the door to the " + direction.lower() + ", wedging it shut.");
-        advanceTurn(save, result);
+        advanceTurn(save, result, false);
         return result;
     }
 
@@ -446,8 +448,7 @@ public class ExplorationService {
     public ExplorationResult rest(SaveGame save) {
         ExplorationResult result = new ExplorationResult();
         result.add("The party rests for a turn, catching their breath.");
-        advanceTurn(save, result);
-        save.getSession().setTurnsSinceRest(0);
+        advanceTurn(save, result, true);
         handleEncounter(save, result);
         return result;
     }
@@ -511,32 +512,125 @@ public class ExplorationService {
 
     /** Advances one dungeon turn: burns light, ticks the rest clock, and runs the wandering-monster
         check. */
-    private void advanceTurn(SaveGame save, ExplorationResult result) {
+    private void advanceTurn(SaveGame save, ExplorationResult result, boolean isRest) {
+        advanceTurn(save, result, isRest, false);
+    }
+
+    /** Advances one dungeon turn: burns light, ticks the rest clock, and runs the wandering-monster
+        check. */
+    private void advanceTurn(SaveGame save, ExplorationResult result, boolean isRest, boolean isLoud) {
         GameSession session = save.getSession();
         session.setDungeonTurn(session.getDungeonTurn() + 1);
-        session.setTurnsSinceRest(session.getTurnsSinceRest() + 1);
+
+        if (isRest) {
+            session.setTurnsSinceRest(0);
+        } else {
+            session.setTurnsSinceRest(session.getTurnsSinceRest() + 1);
+            if (session.getTurnsSinceRest() == 5) {
+                result.add("⚠️ **Warning**: The party has traveled 5 turns without resting. You must REST next turn or become fatigued.");
+            } else if (session.getTurnsSinceRest() == 6) {
+                result.add("🔴 **The party is exhausted!** Skipping mandatory rest incurs a -1 penalty to hit and damage rolls until you rest.");
+            }
+        }
 
         lighting.reconcileBearer(save, result);
         lighting.tickFuel(save, result);
         mules.reconcileHandler(save, result);
+        tickEffects(save, result);
+
+        if (isLoud) {
+            result.add("🔊 **Loud Noise!** The noise echoing through the halls might attract unwanted attention...");
+            int threshold = 1;
+            if (hasHeavyArmor(save)) {
+                threshold += 1;
+            }
+            Character activeChar = save.getCharacter();
+            if (activeChar != null && (activeChar.getCharacterClass() == CharacterClass.THIEF || activeChar.getCharacterClass() == CharacterClass.HALFLING)) {
+                threshold = Math.max(1, threshold - 1);
+            }
+            int roll = dice.d(6);
+            if (roll <= threshold) {
+                triggerWanderingMonster(save, result);
+            }
+        }
 
         // Wandering monster check every other turn (1-in-6, plus an extra roll per additional
         // 8 party members beyond 9).
         int size = partySize(save);
         if (session.getDungeonTurn() % 2 == 0 && wanderingMonsterTriggered(size)) {
-            Room room = session.currentRoom();
-            if (!room.hasLiveMonster()) {
-                MonsterType type = pickWanderingMonster(session.getCurrentLevel() + 1);
-                int count = Math.max(1, dice.d(Math.max(1, session.getCurrentLevel() + 2)));
-                room.setContent(ContentType.MONSTER);
-                room.setMonsterName(type.name());
-                room.setMonsterCount(count);
-                room.setCleared(false);
-                room.setFreshEncounter(true);
-                result.add("**Wandering monster!** "
-                        + count + " " + type.name().toLowerCase() + (count > 1 ? "s" : "") + " appear!");
+            triggerWanderingMonster(save, result);
+        }
+    }
+
+    private boolean triggerWanderingMonster(SaveGame save, ExplorationResult result) {
+        GameSession session = save.getSession();
+        Room room = session.currentRoom();
+        if (!room.hasLiveMonster()) {
+            MonsterType type = pickWanderingMonster(session.getCurrentLevel() + 1);
+            int count = Math.max(1, dice.d(Math.max(1, session.getCurrentLevel() + 2)));
+            room.setContent(ContentType.MONSTER);
+            room.setMonsterName(type.name());
+            room.setMonsterCount(count);
+            room.setCleared(false);
+            room.setFreshEncounter(true);
+            result.add("**Wandering monster!** "
+                    + count + " " + type.name().toLowerCase() + (count > 1 ? "s" : "") + " appear!");
+            return true;
+        }
+        return false;
+    }
+
+    private void tickEffects(SaveGame save, ExplorationResult result) {
+        GameSession session = save.getSession();
+        List<ActiveEffect> active = session.getActiveEffects();
+        if (active == null || active.isEmpty()) {
+            return;
+        }
+
+        Iterator<ActiveEffect> it = active.iterator();
+        while (it.hasNext()) {
+            ActiveEffect effect = it.next();
+            effect.setTurnsRemaining(effect.getTurnsRemaining() - 1);
+
+            String label = effect.getLabel();
+            String ownerText = effect.getOwnerPcName() != null ? " on " + effect.getOwnerPcName() : "";
+
+            if (effect.getTurnsRemaining() == 1) {
+                result.add("⚠️ **Warning**: The effect of **" + label + "**" + ownerText + " is flickering and will soon end.");
+            } else if (effect.getTurnsRemaining() <= 0) {
+                result.add("✨ The effect of **" + label + "**" + ownerText + " has ended.");
+                it.remove();
+                if (label.equalsIgnoreCase("Light") || label.equalsIgnoreCase("Light (Cleric)")) {
+                    recheckLightDarkness(save, result);
+                }
             }
         }
+    }
+
+    private void recheckLightDarkness(SaveGame save, ExplorationResult result) {
+        GameSession session = save.getSession();
+        if (session.isSpellLightActive()) {
+            return;
+        }
+        if (session.getActiveLight() != null && session.getLightBearer() != null) {
+            return;
+        }
+        session.setInDarkness(true);
+        result.add("🌑 **The magical light fades, and you are plunged into darkness!**");
+    }
+
+    private boolean hasHeavyArmor(SaveGame save) {
+        for (Character pc : save.getCharacters()) {
+            if (pc.isAlive() && (pc.getArmor() == dev.freitas.delve.game.engine.Armor.CHAIN_MAIL || pc.getArmor() == dev.freitas.delve.game.engine.Armor.PLATE_MAIL)) {
+                return true;
+            }
+        }
+        for (Retainer r : save.getRetainers()) {
+            if (r.isAlive() && (r.getArmor() == dev.freitas.delve.game.engine.Armor.CHAIN_MAIL || r.getArmor() == dev.freitas.delve.game.engine.Armor.PLATE_MAIL)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void maybeSpringTrap(SaveGame save, ExplorationResult result) {

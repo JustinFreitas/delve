@@ -218,7 +218,7 @@ class MuleTest {
     @Test
     void muleUpkeepIsChargedToItsOwnerOnARealTownVisit() {
         SpellService spells = new SpellService(dice);
-        TownService town = new TownService(spells, dice, new GameClock());
+        TownService town = new TownService(spells, dice, new GameClock(), new dev.freitas.delve.config.GameProps());
         SaveGame save = heroSave();
         Character pc = save.getCharacter();
         pc.setGold(100);
@@ -239,7 +239,7 @@ class MuleTest {
     @Test
     void unpaidMuleUpkeepReportsAShortfallButNeverDesertsIt() {
         SpellService spells = new SpellService(dice);
-        TownService town = new TownService(spells, dice, new GameClock());
+        TownService town = new TownService(spells, dice, new GameClock(), new dev.freitas.delve.config.GameProps());
         SaveGame save = heroSave();
         Character pc = save.getCharacter();
         pc.setGold(0);

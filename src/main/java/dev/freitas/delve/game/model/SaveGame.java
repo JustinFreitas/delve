@@ -45,6 +45,9 @@ public class SaveGame {
         multi-delve runs) never read or write this. */
     private Long lastTownVisitMillis;
 
+    /** JSON serialized backups of the last 3-5 exploration turns for undo/redo rollbacks. */
+    private java.util.List<String> history = new java.util.ArrayList<>();
+
     public SaveGame() {}
 
     public boolean hasCharacter() {
@@ -370,5 +373,13 @@ public class SaveGame {
 
     private String keyFor(Combatant c) {
         return "k:" + System.identityHashCode(c);
+    }
+
+    public java.util.List<String> getHistory() {
+        return history;
+    }
+
+    public void setHistory(java.util.List<String> history) {
+        this.history = history == null ? new java.util.ArrayList<>() : history;
     }
 }

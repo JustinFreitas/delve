@@ -19,7 +19,7 @@ class HireCommandTest {
 
     private final Dice dice = new Dice(new Random(11));
     private final RetainerFactory retainerFactory = new RetainerFactory(dice);
-    private final HireCommand hireCommand = new HireCommand(retainerFactory, dice);
+    private final HireCommand hireCommand = new HireCommand(retainerFactory, dice, new dev.freitas.delve.config.GameProps());
 
     @Test
     void smartHireOrderIsFighterDwarfClericElfHalflingThiefMagicUser() {
@@ -69,7 +69,7 @@ class HireCommandTest {
     void bulkHireRandomModeProducesTheExactSeededSequence() {
         Dice seeded = new Dice(new Random(11));
         RetainerFactory factory = new RetainerFactory(seeded);
-        HireCommand command = new HireCommand(factory, seeded);
+        HireCommand command = new HireCommand(factory, seeded, new dev.freitas.delve.config.GameProps());
         SaveGame save = new SaveGame();
         Character pc = pc(1000);
         save.setCharacter(pc);
@@ -90,7 +90,7 @@ class HireCommandTest {
         for (int seed = 0; seed < 5; seed++) {
             Dice seeded = new Dice(new Random(seed));
             RetainerFactory factory = new RetainerFactory(seeded);
-            HireCommand command = new HireCommand(factory, seeded);
+            HireCommand command = new HireCommand(factory, seeded, new dev.freitas.delve.config.GameProps());
             SaveGame save = new SaveGame();
             Character pc = pc(1000);
             save.setCharacter(pc);

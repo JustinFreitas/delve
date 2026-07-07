@@ -33,6 +33,7 @@ import org.springframework.web.context.WebApplicationContext;
 @TestPropertySource(properties = {
     "config.token=test-token",
     "config.web.enabled=true",
+    "config.web.admin-user-ids=999000111",
     "spring.datasource.url=jdbc:h2:mem:delve-web-test;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1",
     "spring.security.oauth2.client.registration.discord.client-id=test-id",
     "spring.security.oauth2.client.registration.discord.client-secret=test-secret",
@@ -57,6 +58,9 @@ class WebApiTest {
     // A Discord principal whose getName() returns the numeric user id (user-name-attribute=id).
     private static final OAuth2User DISCORD_USER = new DefaultOAuth2User(
             List.of(new SimpleGrantedAuthority("ROLE_USER")), Map.of("id", "777000111"), "id");
+
+    private static final OAuth2User ADMIN_USER = new DefaultOAuth2User(
+            List.of(new SimpleGrantedAuthority("ROLE_USER")), Map.of("id", "999000111"), "id");
 
     @BeforeEach
     void setUp() {
@@ -99,5 +103,61 @@ class WebApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"cls\":\"fighter\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void undoEndpointsAndPermissionsWork() throws Exception {
+        // 1. Check isAdmin returns false for DISCORD_USER (since not in admin list)
+        mvc.perform(get("/api/user/admin").with(oauth2Login().oauth2User(DISCORD_USER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(false));
+
+        // 2. Attempting to undo as non-admin returns forbidden error in ActionResult
+        mvc.perform(post("/api/delve/undo")
+                        .with(oauth2Login().oauth2User(DISCORD_USER))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.lines[0]").value("❌ Forbidden: Only administrator accounts can use time rewind."));
+    }
+
+    @Test
+    void adminUndoRestoresPreviousState() throws Exception {
+        // 1. Check isAdmin returns true for ADMIN_USER
+        mvc.perform(get("/api/user/admin").with(oauth2Login().oauth2User(ADMIN_USER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(true));
+
+        // 2. Roll a character as ADMIN_USER
+        mvc.perform(post("/api/character/roll")
+                        .with(oauth2Login().oauth2User(ADMIN_USER))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cls\":\"fighter\",\"name\":\"AdminHero\"}"))
+                .andExpect(status().isOk());
+
+        // 3. Enter dungeon
+        mvc.perform(post("/api/delve/enter")
+                        .with(oauth2Login().oauth2User(ADMIN_USER))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        // 4. Move East (which advances turn, creating a history snapshot)
+        mvc.perform(post("/api/delve/move")
+                        .with(oauth2Login().oauth2User(ADMIN_USER))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"direction\":\"east\"}"))
+                .andExpect(status().isOk());
+
+        // 5. Call undo to rollback the move
+        mvc.perform(post("/api/delve/undo")
+                        .with(oauth2Login().oauth2User(ADMIN_USER))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(true))
+                .andExpect(jsonPath("$.lines[0]").value("🔮 **Time Rewound**: Rolled back the last action."));
     }
 }

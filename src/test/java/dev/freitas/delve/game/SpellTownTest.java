@@ -36,7 +36,7 @@ class SpellTownTest {
     private final Dice dice = new Dice(new Random(31));
     private final SpellService spells = new SpellService(dice);
     private final CombatService combat = new CombatService(dice, spells);
-    private final TownService town = new TownService(spells, dice, new GameClock());
+    private final TownService town = new TownService(spells, dice, new GameClock(), new dev.freitas.delve.config.GameProps());
     private final CharacterFactory factory = new CharacterFactory(dice);
     private final RetainerFactory retainerFactory = new RetainerFactory(dice);
 
@@ -91,7 +91,7 @@ class SpellTownTest {
         cleric.setCurrentHp(4);
         cleric.getMemorizedSpells().add(Spell.CURE_LIGHT_WOUNDS.name());
 
-        var result = spells.castOutOfCombat(cleric, Spell.CURE_LIGHT_WOUNDS);
+        var result = spells.castOutOfCombat(cleric, Spell.CURE_LIGHT_WOUNDS, null);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(cleric.getCurrentHp()).isGreaterThan(4);
@@ -102,7 +102,7 @@ class SpellTownTest {
     void damageSpellsCannotBeCastOutOfCombat() {
         Character mu = factory.create("Mage", CharacterClass.MAGIC_USER, new AbilityScores(9, 16, 9, 12, 12, 9));
         mu.getMemorizedSpells().add(Spell.MAGIC_MISSILE.name());
-        var result = spells.castOutOfCombat(mu, Spell.MAGIC_MISSILE);
+        var result = spells.castOutOfCombat(mu, Spell.MAGIC_MISSILE, null);
         assertThat(result.isSuccess()).isFalse();
         assertThat(spells.isMemorized(mu, Spell.MAGIC_MISSILE)).isTrue(); // not consumed on failure
     }
@@ -148,7 +148,7 @@ class SpellTownTest {
         int fullyHealed = 0;
         for (int seed = 0; seed < trials; seed++) {
             Dice localDice = new Dice(new Random(seed));
-            TownService localTown = new TownService(new SpellService(localDice), localDice, new GameClock());
+            TownService localTown = new TownService(new SpellService(localDice), localDice, new GameClock(), new dev.freitas.delve.config.GameProps());
             SaveGame save = new SaveGame();
             Character hero = new CharacterFactory(localDice)
                     .create("Hero", CharacterClass.FIGHTER, new AbilityScores(9, 9, 9, 9, 9, 9));
@@ -187,7 +187,7 @@ class SpellTownTest {
         int lost = 0;
         for (int seed = 0; seed < 100; seed++) {
             Dice localDice = new Dice(new Random(seed));
-            TownService localTown = new TownService(new SpellService(localDice), localDice, new GameClock());
+            TownService localTown = new TownService(new SpellService(localDice), localDice, new GameClock(), new dev.freitas.delve.config.GameProps());
             SaveGame save = new SaveGame();
             Character hero = new CharacterFactory(localDice)
                     .create("Hero", CharacterClass.FIGHTER, new AbilityScores(12, 9, 9, 12, 12, 9));

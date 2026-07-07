@@ -6,6 +6,7 @@ import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Spell;
 import dev.freitas.delve.game.engine.SpellTables;
 import dev.freitas.delve.game.model.Character;
+import dev.freitas.delve.game.model.GameSession;
 import dev.freitas.delve.game.model.SaveGame;
 import java.util.ArrayList;
 import java.util.List;
@@ -106,7 +107,7 @@ public class SpellService {
     /** Casts a non-combat spell (healing or utility) as {@code c}. Enemy-targeting spells are rejected
         here. Takes the caster directly (not a {@link SaveGame}) so callers can resolve a specific PC in
         a multi-PC party — see {@code CastCommand}'s optional leading PC-name argument. */
-    public ExplorationResult castOutOfCombat(Character c, Spell spell) {
+    public ExplorationResult castOutOfCombat(Character c, Spell spell, GameSession session) {
         if (!isMemorized(c, spell)) {
             return ExplorationResult.failure("You don't have **" + spell.displayName() + "** prepared.");
         }
@@ -114,15 +115,41 @@ public class SpellService {
             return ExplorationResult.failure("**" + spell.displayName() + "** can only be cast in combat.");
         }
         consume(c, spell);
-        return switch (spell.effect()) {
+        
+        ExplorationResult result;
+        switch (spell.effect()) {
             case HEAL -> {
                 int healed = CURE_LIGHT_WOUNDS.roll(dice);
                 int before = c.getCurrentHp();
                 c.setCurrentHp(Math.min(c.getMaxHp(), c.getCurrentHp() + healed));
-                yield ExplorationResult.of("You cast **" + spell.displayName() + "**, recovering "
+                result = ExplorationResult.of("You cast **" + spell.displayName() + "**, recovering "
                         + (c.getCurrentHp() - before) + " hp (" + c.getCurrentHp() + "/" + c.getMaxHp() + ").");
             }
-            default -> ExplorationResult.of("You cast **" + spell.displayName() + "**.");
+            default -> {
+                result = ExplorationResult.of("You cast **" + spell.displayName() + "**.");
+            }
+        }
+
+        if (session != null && session.isInDungeon()) {
+            int duration = getSpellDurationTurns(spell);
+            if (duration > 0) {
+                session.addEffect(spell.displayName(), duration, c.getName());
+                result.add("✨ **" + spell.displayName() + "** is now active on **" + c.getName() + "** for " + duration + " turns.");
+            }
+        }
+
+        return result;
+    }
+
+    private int getSpellDurationTurns(Spell spell) {
+        return switch (spell) {
+            case SHIELD -> 2;
+            case DETECT_MAGIC -> 2;
+            case LIGHT, DIVINE_LIGHT -> 12;
+            case PROTECTION_FROM_EVIL, PROTECTION_FROM_EVIL_CLERIC -> 12;
+            case RESIST_COLD -> 6;
+            case HOLD_PORTAL -> 6;
+            default -> 0;
         };
     }
 

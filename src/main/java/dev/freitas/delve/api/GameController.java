@@ -2,6 +2,8 @@ package dev.freitas.delve.api;
 
 import dev.freitas.delve.api.dto.ActionResult;
 import dev.freitas.delve.api.dto.StateSnapshot;
+import dev.freitas.delve.config.WebProps;
+import java.util.List;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
@@ -24,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class GameController {
 
     private final GameFacade game;
+    private final WebProps webProps;
 
-    public GameController(GameFacade game) {
+    public GameController(GameFacade game, WebProps webProps) {
         this.game = game;
+        this.webProps = webProps;
     }
 
     private static long userId(OAuth2User principal) {
@@ -73,6 +77,20 @@ public class GameController {
     @PostMapping("/delve/search")
     public ActionResult search(@AuthenticationPrincipal OAuth2User principal) {
         return game.search(userId(principal));
+    }
+
+    @PostMapping("/delve/rest")
+    public ActionResult rest(@AuthenticationPrincipal OAuth2User principal) {
+        return game.rest(userId(principal));
+    }
+
+    @PostMapping("/delve/undo")
+    public ActionResult undo(@AuthenticationPrincipal OAuth2User principal) {
+        long userId = userId(principal);
+        if (!webProps.isAdmin(String.valueOf(userId))) {
+            return ActionResult.of(false, List.of("❌ Forbidden: Only administrator accounts can use time rewind."), game.state(userId));
+        }
+        return game.undo(userId);
     }
 
     @PostMapping("/delve/open")
@@ -153,6 +171,11 @@ public class GameController {
     @PostMapping("/delve/bank/withdraw")
     public ActionResult bankWithdraw(@AuthenticationPrincipal OAuth2User principal, @RequestBody BankGoldRequest req) {
         return game.bankWithdraw(userId(principal), req.pc(), req.gold());
+    }
+
+    @GetMapping("/user/admin")
+    public boolean isAdmin(@AuthenticationPrincipal OAuth2User principal) {
+        return webProps.isAdmin(String.valueOf(userId(principal)));
     }
 
     // Request bodies. `pc` (where present) names a specific PC in a multi-PC party; null/blank

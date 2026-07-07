@@ -20,6 +20,9 @@ public class WebProps {
      */
     private List<String> allowedUserIds = List.of();
 
+    /** Discord user ids permitted to use administrator commands (like undo/redo). */
+    private List<String> adminUserIds = List.of();
+
     /** Per-principal request budget for {@code /api/**}, per minute (basic abuse guard). */
     private int requestsPerMinute = 120;
 
@@ -39,6 +42,14 @@ public class WebProps {
         this.allowedUserIds = allowedUserIds == null ? List.of() : allowedUserIds;
     }
 
+    public List<String> getAdminUserIds() {
+        return adminUserIds;
+    }
+
+    public void setAdminUserIds(List<String> adminUserIds) {
+        this.adminUserIds = adminUserIds == null ? List.of() : adminUserIds;
+    }
+
     public int getRequestsPerMinute() {
         return requestsPerMinute;
     }
@@ -50,5 +61,10 @@ public class WebProps {
     /** Whether the given Discord user id may use the web interface under the current allowlist. */
     public boolean isAllowed(String discordUserId) {
         return allowedUserIds.isEmpty() || allowedUserIds.contains(discordUserId);
+    }
+
+    /** Whether the given Discord user id is an administrator. */
+    public boolean isAdmin(String discordUserId) {
+        return adminUserIds.contains(discordUserId);
     }
 }
