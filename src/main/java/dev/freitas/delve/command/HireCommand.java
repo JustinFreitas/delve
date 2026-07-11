@@ -38,24 +38,6 @@ public class HireCommand extends Command {
         RANDOM
     }
 
-    /** Every DM-enabled class, tankiest-first (lower armor-class proxy, then higher hit-die), the same
-        ranking {@link Toughness} applies to live combatants — filling every slot naturally hires one of
-        each, tankiest-first; fewer slots hires the N tankiest classes. Computed per-instance (not
-        static) since it now depends on the DM's own {@link GameProps#isClassEnabled} configuration,
-        not just the fixed enum. */
-    private final List<CharacterClass> smartHireOrder;
-
-    private static List<CharacterClass> smartHireOrder(GameProps gameProps) {
-        List<CharacterClass> classes = new ArrayList<>();
-        for (CharacterClass c : CharacterClass.values()) {
-            if (gameProps.isClassEnabled(c)) {
-                classes.add(c);
-            }
-        }
-        classes.sort(Toughness.byToughness(HireCommand::retainerArmorProxy, CharacterClass::hitDie));
-        return List.copyOf(classes);
-    }
-
     /** Ascending-AC proxy for a class's retainer starting kit, from the same table
         {@link RetainerFactory#equipmentFor} uses for a real hire — no second armor table to maintain. */
     private static int retainerArmorProxy(CharacterClass cls) {
@@ -73,12 +55,21 @@ public class HireCommand extends Command {
         this.dice = dice;
         this.gameProps = gameProps;
         HIRING_FEE = gameProps.getRetainerHiringFee();
-        this.smartHireOrder = smartHireOrder(gameProps);
     }
 
-    /** Package-private: tests exercise this directly without a {@link CommandContext}. */
+    /** Every DM-enabled class, tankiest-first (lower armor-class proxy, then higher hit-die), the same
+        ranking {@link Toughness} applies to live combatants — filling every slot naturally hires one of
+        each, tankiest-first; fewer slots hires the N tankiest classes. Computed per-instance dynamically
+        to respect runtime updates to {@link GameProps}. Package-private so tests can exercise this directly. */
     List<CharacterClass> getSmartHireOrder() {
-        return smartHireOrder;
+        List<CharacterClass> classes = new ArrayList<>();
+        for (CharacterClass c : CharacterClass.values()) {
+            if (gameProps.isClassEnabled(c)) {
+                classes.add(c);
+            }
+        }
+        classes.sort(Toughness.byToughness(HireCommand::retainerArmorProxy, CharacterClass::hitDie));
+        return List.copyOf(classes);
     }
 
     @Override
@@ -210,11 +201,12 @@ public class HireCommand extends Command {
     List<Retainer> bulkHire(SaveGame save, Character pc, BulkMode mode, CharacterClass fixedClass, int count) {
         List<String> pool = new ArrayList<>(NAMES);
         List<Retainer> hired = new ArrayList<>();
+        List<CharacterClass> smartOrder = getSmartHireOrder();
         for (int i = 0; i < count; i++) {
             CharacterClass cls = switch (mode) {
                 case SINGLE -> fixedClass;
-                case SMART -> smartHireOrder.get(i % smartHireOrder.size());
-                case RANDOM -> smartHireOrder.get(dice.d(smartHireOrder.size()) - 1);
+                case SMART -> smartOrder.get(i % smartOrder.size());
+                case RANDOM -> smartOrder.get(dice.d(smartOrder.size()) - 1);
             };
             // Draw without replacement: <= 7 hires (the CHA cap ceiling), 16 names -> never a duplicate.
             String name = pool.remove(dice.d(pool.size()) - 1);
@@ -286,6 +278,7 @@ public class HireCommand extends Command {
             return hires;
         }
 
+        List<CharacterClass> smartOrder = getSmartHireOrder();
         List<String> pool = new ArrayList<>(NAMES);
         for (int i = 0; i < needed; i++) {
             Character payer = livingPcs.stream()
@@ -296,7 +289,7 @@ public class HireCommand extends Command {
             if (payer == null) {
                 break; // best effort: no PC can afford/authorize another hire
             }
-            CharacterClass cls = smartHireOrder.get(i % smartHireOrder.size());
+            CharacterClass cls = smartOrder.get(i % smartOrder.size());
             String name = pool.isEmpty() ? NAMES.get(dice.d(NAMES.size()) - 1) : pool.remove(dice.d(pool.size()) - 1);
             hires.add(new PartyHire(hireOne(save, payer, cls, name), payer));
         }

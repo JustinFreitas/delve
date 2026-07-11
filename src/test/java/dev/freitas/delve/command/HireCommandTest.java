@@ -255,6 +255,25 @@ class HireCommandTest {
         assertThat(save.getRetainers()).isEmpty();
     }
 
+    @Test
+    void smartHireOrderUpdatesDynamicallyWhenCustomClassesAreEnabledAtRuntime() {
+        dev.freitas.delve.config.GameProps props = new dev.freitas.delve.config.GameProps();
+        HireCommand command = new HireCommand(retainerFactory, dice, props);
+
+        // Before enabling custom classes (default standard only)
+        assertThat(command.getSmartHireOrder()).containsExactly(
+                CharacterClass.FIGHTER, CharacterClass.DWARF, CharacterClass.CLERIC,
+                CharacterClass.ELF, CharacterClass.HALFLING, CharacterClass.THIEF, CharacterClass.MAGIC_USER);
+
+        // Enable Barbarian and Gnome dynamically
+        props.setEnabledCustomClasses("barbarian,gnome");
+
+        // The list should now dynamically contain Barbarian and Gnome, sorted by AC then HD
+        assertThat(command.getSmartHireOrder()).containsExactly(
+                CharacterClass.FIGHTER, CharacterClass.DWARF, CharacterClass.BARBARIAN, CharacterClass.CLERIC,
+                CharacterClass.ELF, CharacterClass.HALFLING, CharacterClass.THIEF, CharacterClass.GNOME, CharacterClass.MAGIC_USER);
+    }
+
     private Character pc(int gold) {
         Character c = new Character();
         c.setName("Hero");
