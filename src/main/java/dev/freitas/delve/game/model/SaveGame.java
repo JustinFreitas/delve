@@ -210,26 +210,28 @@ public class SaveGame {
     @JsonIgnore
     public java.util.List<Combatant> fullOrder() {
         java.util.List<Combatant> ordered = new java.util.ArrayList<>();
-        java.util.Set<String> placed = new java.util.HashSet<>();
+        // Identity-keyed (not equals/hashCode) so two members can never collide however they compare.
+        java.util.Set<Combatant> placed =
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         for (String token : marchingOrder) {
             Combatant resolved = resolve(token);
-            if (resolved != null && placed.add(keyFor(resolved))) {
+            if (resolved != null && placed.add(resolved)) {
                 ordered.add(resolved);
             }
         }
         java.util.List<Combatant> unplaced = new java.util.ArrayList<>();
         for (Retainer r : retainers) {
-            if (placed.add(keyFor(r))) {
+            if (placed.add(r)) {
                 unplaced.add(r);
             }
         }
         for (Mule m : mules) {
-            if (placed.add(keyFor(m))) {
+            if (placed.add(m)) {
                 unplaced.add(m);
             }
         }
         for (Character c : characters) {
-            if (placed.add(keyFor(c))) {
+            if (placed.add(c)) {
                 unplaced.add(c);
             }
         }
@@ -369,10 +371,6 @@ public class SaveGame {
             return new PcNameToken(named, argsText.substring(leadSpace + 1).trim());
         }
         return new PcNameToken(defaultActor, argsText);
-    }
-
-    private String keyFor(Combatant c) {
-        return "k:" + System.identityHashCode(c);
     }
 
     public java.util.List<String> getHistory() {

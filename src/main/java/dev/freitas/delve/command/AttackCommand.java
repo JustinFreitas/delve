@@ -27,13 +27,14 @@ public class AttackCommand extends DungeonCommand {
         }
         String arg = ctx.getArgumentText().trim();
 
-        // An optional leading PC-name names the acting attacker in a multi-PC party.
+        // An optional leading PC-name names the acting attacker in a multi-PC party — with or without
+        // a trailing target number (`/attack Bram 2` and plain `/attack Bram` both mean Bram acts).
         String actorToken = null;
         int firstSpace = arg.indexOf(' ');
         String firstToken = firstSpace > 0 ? arg.substring(0, firstSpace) : arg;
-        if (firstSpace > 0 && save.resolve(firstToken) instanceof Character) {
+        if (!firstToken.isEmpty() && save.resolve(firstToken) instanceof Character) {
             actorToken = firstToken;
-            arg = arg.substring(firstSpace + 1).trim();
+            arg = firstSpace > 0 ? arg.substring(firstSpace + 1).trim() : "";
         }
 
         Integer target = parseTarget(arg);

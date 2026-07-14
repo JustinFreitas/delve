@@ -19,8 +19,9 @@ public class ExplorationResult {
         return r.add(line);
     }
 
+    /** Appends a line; an empty string is a deliberate blank separator line, only null is skipped. */
     public ExplorationResult add(String line) {
-        if (line != null && !line.isEmpty()) {
+        if (line != null) {
             lines.add(line);
         }
         return this;

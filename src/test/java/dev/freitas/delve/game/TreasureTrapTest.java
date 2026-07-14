@@ -35,6 +35,7 @@ class TreasureTrapTest {
 
         for (int i = 0; i < 200 && !room.isLooted(); i++) {
             service.search(save);
+            neutralizeEncounter(save, room);
         }
         assertThat(room.isTreasureTrapDisarmed()).isTrue();
         assertThat(room.isLooted()).isTrue();
@@ -53,6 +54,7 @@ class TreasureTrapTest {
 
         for (int i = 0; i < 500 && !room.isLooted(); i++) {
             service.search(save);
+            neutralizeEncounter(save, room);
         }
         assertThat(room.isLooted()).isTrue();
         assertThat(fighter.getCurrentHp()).isLessThan(200); // at least one failed attempt cost HP
@@ -73,6 +75,13 @@ class TreasureTrapTest {
         assertThat(room.isLooted()).isFalse();
         assertThat(room.isTreasureTrapDisarmed()).isFalse();
         assertThat(room.isHasTreasure()).isTrue();
+    }
+
+    /** Clears any wandering-monster combat so the next search isn't refused by the in-combat gate. */
+    private void neutralizeEncounter(SaveGame save, Room room) {
+        save.getSession().setState(SessionState.EXPLORING);
+        save.getSession().setCombat(null);
+        room.setCleared(true);
     }
 
     private ExplorationService newService(Dice dice) {

@@ -20,6 +20,9 @@ import dev.freitas.delve.game.engine.DamageRoll;
  *                         round (encounter movement is conventionally 1/3 of this figure per round)
  * @param effect           what a hit does beyond normal damage (e.g. {@link AttackEffect#DRAIN});
  *                         {@code attack} is unused/nominal for non-{@code NORMAL} effects
+ * @param undead           whether this is undead: always-hostile (no reaction roll) and turnable by a
+ *                         Cleric — a stat-block fact here rather than a name list in
+ *                         {@code CombatService}, so a new undead type can't silently miss those rules
  */
 public record MonsterType(
         String name,
@@ -31,7 +34,24 @@ public record MonsterType(
         int xpValue,
         String numberAppearing,
         int moveRate,
-        AttackEffect effect) {
+        AttackEffect effect,
+        boolean undead) {
+
+    /** Convenience for living monsters, the common case. */
+    public MonsterType(
+            String name,
+            int hitDiceCount,
+            int hitDiceBonus,
+            int armorClass,
+            DamageRoll attack,
+            int morale,
+            int xpValue,
+            String numberAppearing,
+            int moveRate,
+            AttackEffect effect) {
+        this(name, hitDiceCount, hitDiceBonus, armorClass, attack, morale, xpValue, numberAppearing,
+                moveRate, effect, false);
+    }
 
     /** This monster's THAC0, derived from its Hit Dice. */
     public int thac0() {

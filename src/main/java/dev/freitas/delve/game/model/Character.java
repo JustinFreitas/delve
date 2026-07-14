@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import dev.freitas.delve.game.engine.Ability;
 import dev.freitas.delve.game.engine.AbilityScores;
 import dev.freitas.delve.game.engine.Advanceable;
+import dev.freitas.delve.game.engine.Advancement;
 import dev.freitas.delve.game.engine.Armor;
 import dev.freitas.delve.game.engine.CharacterClass;
 import dev.freitas.delve.game.engine.Combatant;
@@ -194,9 +195,11 @@ public class Character implements Combatant, Advanceable {
         return offHandWeapon == null ? null : " + " + offHandWeapon + " off hand (+1 to attack)";
     }
 
-    /** XP needed to reach the next level (only level 2 is known until Milestone 7). */
+    /** Cumulative XP needed to reach the next level (the current level's own threshold at class max,
+        since there is no next level to price). */
     public int xpForNextLevel() {
-        return characterClass.xpForLevel2();
+        return Advancement.xpForLevel(characterClass,
+                Math.min(level + 1, Advancement.maxLevel(characterClass)));
     }
 
     @JsonIgnore

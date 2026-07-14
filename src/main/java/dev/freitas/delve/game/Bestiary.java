@@ -8,9 +8,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A small starter set of classic low-level B/X monsters. This is the in-code seed for the dungeon's
- * monster table; it is replaced/augmented by a {@code monsters.json} content file once dungeon
- * stocking lands (Milestone 4).
+ * The full monster table: a small set of classic low-level B/X monsters. Both the procedural
+ * generator's stocking and authored modules' monster references ({@code ModuleLoader}) resolve
+ * against this list by name — there is deliberately no external {@code monsters.json}; a new monster
+ * is a new constant here.
  */
 public final class Bestiary {
 
@@ -21,7 +22,7 @@ public final class Bestiary {
     public static final MonsterType KOBOLD =
             new MonsterType("Kobold", 1, -1, 7, new DamageRoll(1, 4), 6, 5, "4d4", 60, AttackEffect.NORMAL);
     public static final MonsterType SKELETON =
-            new MonsterType("Skeleton", 1, 0, 7, new DamageRoll(1, 6), 12, 10, "3d4", 60, AttackEffect.NORMAL);
+            new MonsterType("Skeleton", 1, 0, 7, new DamageRoll(1, 6), 12, 10, "3d4", 60, AttackEffect.NORMAL, true);
     public static final MonsterType ORC =
             new MonsterType("Orc", 1, 0, 6, new DamageRoll(1, 6), 8, 10, "2d4", 60, AttackEffect.NORMAL);
     public static final MonsterType STIRGE =
@@ -29,14 +30,14 @@ public final class Bestiary {
     public static final MonsterType HOBGOBLIN =
             new MonsterType("Hobgoblin", 1, 1, 6, new DamageRoll(1, 8), 8, 15, "1d6", 90, AttackEffect.NORMAL);
     public static final MonsterType ZOMBIE =
-            new MonsterType("Zombie", 2, 0, 8, new DamageRoll(1, 8), 12, 20, "2d4", 60, AttackEffect.NORMAL);
+            new MonsterType("Zombie", 2, 0, 8, new DamageRoll(1, 8), 12, 20, "2d4", 60, AttackEffect.NORMAL, true);
     public static final MonsterType GIANT_RAT =
             new MonsterType("Giant Rat", 1, 0, 7, new DamageRoll(1, 3), 8, 5, "3d6", 120, AttackEffect.NORMAL);
     public static final MonsterType BUGBEAR =
             new MonsterType("Bugbear", 3, 1, 5, new DamageRoll(2, 4), 9, 75, "2d4", 90, AttackEffect.NORMAL);
     /** Classic B/X energy drainer: a hit permanently drains a level instead of dealing normal damage. */
     public static final MonsterType WIGHT =
-            new MonsterType("Wight", 3, 0, 5, new DamageRoll(1, 4), 12, 175, "1d4", 90, AttackEffect.DRAIN);
+            new MonsterType("Wight", 3, 0, 5, new DamageRoll(1, 4), 12, 175, "1d4", 90, AttackEffect.DRAIN, true);
 
     private static final Map<String, MonsterType> BY_NAME = new LinkedHashMap<>();
 

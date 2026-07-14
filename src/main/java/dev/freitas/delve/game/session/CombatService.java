@@ -64,7 +64,7 @@ public class CombatService {
     /** B/X reaction: undead always attack; otherwise the 5-tier 2d6 + CHA modifier table (only 5 or
         less is hostile — most encounters are avoidable, per the house rule). */
     public ReactionTier reaction(Character character, MonsterType type) {
-        if (isUndead(type)) {
+        if (type.undead()) {
             return ReactionTier.ATTACKS;
         }
         int roll = dice.roll2d6() + character.getAbilities().modifier(Ability.CHA);
@@ -252,7 +252,7 @@ public class CombatService {
         } else {
             type = null;
         }
-        if (type == null || !isUndead(type)) {
+        if (type == null || !type.undead()) {
             return ExplorationResult.failure("There's nothing undead here to turn.");
         }
         ExplorationResult result = alreadyFighting ? new ExplorationResult() : startCombat(save);
@@ -762,7 +762,10 @@ public class CombatService {
 
         if (totalXp > 0) {
             // Every living PC earns a full share, each retainer a half-share — reduces to today's exact
-            // behavior at 1 PC.
+            // behavior at 1 PC. Deliberate: the denominator counts retainers as FULL shares, then pays
+            // them only half — the other half of each retainer's cut simply isn't awarded to anyone
+            // (read it as the hireling pocketing wages the party never sees), the same wage abstraction
+            // ExplorationService.loot() uses for the gold itself. Not a rounding bug.
             List<Character> livingPcs = save.livingCharacters();
             List<Retainer> survivors = save.livingRetainers();
             int shares = livingPcs.size() + survivors.size();
@@ -919,10 +922,5 @@ public class CombatService {
         }
         sb.append(String.join(", ", parts)).append(".");
         return sb.toString();
-    }
-
-    private boolean isUndead(MonsterType type) {
-        String n = type.name().toLowerCase();
-        return n.equals("skeleton") || n.equals("zombie") || n.equals("wight");
     }
 }

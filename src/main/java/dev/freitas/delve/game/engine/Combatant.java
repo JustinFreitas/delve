@@ -1,6 +1,7 @@
 package dev.freitas.delve.game.engine;
 
-/** Anything that can fight in a round of combat — implemented by the player character and retainers. */
+/** Anything that can take (and usually deal) hits in a round of combat — implemented by player
+    characters, retainers, and the party's mule (which is targetable but never attacks). */
 public interface Combatant {
 
     String getName();

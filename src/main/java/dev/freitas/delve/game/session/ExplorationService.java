@@ -3,7 +3,9 @@ package dev.freitas.delve.game.session;
 import dev.freitas.delve.game.Bestiary;
 import dev.freitas.delve.game.dungeon.DungeonGenerator;
 import dev.freitas.delve.game.engine.Ability;
+import dev.freitas.delve.game.engine.Advanceable;
 import dev.freitas.delve.game.engine.CharacterClass;
+import dev.freitas.delve.game.engine.Combatant;
 import dev.freitas.delve.game.engine.DamageRoll;
 import dev.freitas.delve.game.engine.Dice;
 import dev.freitas.delve.game.engine.Formation;
@@ -35,8 +37,9 @@ import org.springframework.stereotype.Service;
 /**
  * The exploration rules: starting a delve, looking, moving, searching, opening doors, and descending
  * stairs — together with the B/X bookkeeping each action triggers (10-minute dungeon turns, torch
- * burn, and a wandering-monster check every other turn). Combat resolution itself arrives in the next
- * milestone; for now an encounter is surfaced and left in the room.
+ * burn, and a wandering-monster check every other turn). A hostile encounter hands off to
+ * {@link CombatService#startCombat}; every other action (everything but {@code look}) is refused
+ * while that fight is live — see {@link #requireNotInCombat}.
  */
 @Service
 public class ExplorationService {
@@ -108,11 +111,22 @@ public class ExplorationService {
         return ExplorationResult.of(describeRoom(session));
     }
 
+    /** Shared guard for every action that mustn't happen mid-fight (all of them except `look`):
+        non-null failure while a combat is live, null otherwise. Leaving the fight is `flee`'s job —
+        it alone applies parting blows and the evasion check. */
+    private ExplorationResult requireNotInCombat(GameSession session) {
+        if (session.getState() == SessionState.IN_COMBAT) {
+            return ExplorationResult.failure("You are locked in combat — `attack` or `flee` first.");
+        }
+        return null;
+    }
+
     /** Moves through a cardinal exit, advancing one dungeon turn. */
     public ExplorationResult move(SaveGame save, Direction direction) {
         GameSession session = save.getSession();
-        if (session.getState() == SessionState.IN_COMBAT) {
-            return ExplorationResult.failure("You are locked in combat — `attack` or `flee` first.");
+        ExplorationResult locked = requireNotInCombat(session);
+        if (locked != null) {
+            return locked;
         }
         Room room = session.currentRoom();
         Exit exit = room.getExits().get(direction);
@@ -164,6 +178,10 @@ public class ExplorationService {
     /** Descends or ascends stairs in the current room, advancing one dungeon turn. */
     public ExplorationResult useStairs(SaveGame save, boolean down) {
         GameSession session = save.getSession();
+        ExplorationResult locked = requireNotInCombat(session);
+        if (locked != null) {
+            return locked;
+        }
         Room room = session.currentRoom();
         boolean available = down ? room.isStairsDown() : room.isStairsUp();
         if (!available) {
@@ -192,12 +210,15 @@ public class ExplorationService {
         breakdown behind a treasure find (used by {@code /autodelve}'s verbose log detail). */
     public ExplorationResult search(SaveGame save, boolean verbose) {
         GameSession session = save.getSession();
-        Character character = save.getCharacter();
+        ExplorationResult locked = requireNotInCombat(session);
+        if (locked != null) {
+            return locked;
+        }
         Room room = session.currentRoom();
         ExplorationResult result = new ExplorationResult();
         result.add("You search the room carefully...");
 
-        int secretChance = secretDoorChance(character.getCharacterClass());
+        int secretChance = bestSecretDoorChance(save);
         int found = 0;
         for (Exit exit : room.getExits().values()) {
             if (exit.isSecret() && !exit.isRevealed() && dice.d(6) <= secretChance) {
@@ -207,7 +228,7 @@ public class ExplorationService {
             }
         }
 
-        int trapChance = trapDetectionChance(character.getCharacterClass());
+        int trapChance = bestTrapDetectionChance(save);
         if (room.isTrapped() && !room.isTrapDetected() && !room.isTrapSprung() && dice.d(6) <= trapChance) {
             room.setTrapDetected(true);
             found++;
@@ -233,13 +254,17 @@ public class ExplorationService {
         if (room.isHasTreasure() && !room.isLooted()) {
             if (room.isTreasureTrapped() && !room.isTreasureTrapDisarmed()) {
                 found++;
-                if (tryDisarmTreasureTrap(character)) {
+                // The party's best remove-traps hand (a Thief if it has one) attempts the disarm — and
+                // springs it on themselves if they fumble it, not on the front rank.
+                Character disarmer = bestDisarmer(save);
+                if (tryDisarmTreasureTrap(disarmer)) {
                     room.setTreasureTrapDisarmed(true);
                     result.add("You carefully disarm " + room.getTreasureTrapDescription()
                             + " guarding the treasure.");
                     loot(save, room, result, verbose);
                 } else {
-                    applyTrapDamage(save, room.getTreasureTrapDamage(), room.getTreasureTrapDescription(), result);
+                    applyTrapDamage(save, room.getTreasureTrapDamage(), room.getTreasureTrapDescription(),
+                            disarmer, result);
                     // Treasure stays put (room.looted is never set) so a retry is possible on a later search.
                 }
             } else {
@@ -280,6 +305,9 @@ public class ExplorationService {
         treasureFound.append("!");
         result.add(treasureFound.toString());
 
+        // Deliberate wage abstraction (mirrors CombatService.victory()'s XP split): retainers count as
+        // full shares in the denominator, and their cut of the gold is never credited to anyone — a
+        // hireling pockets their share, it doesn't stay party wealth. Their XP is half the PC share.
         List<Character> livingPcs = save.livingCharacters();
         List<Retainer> survivors = save.livingRetainers();
         int shares = livingPcs.size() + survivors.size();
@@ -326,6 +354,10 @@ public class ExplorationService {
     /** Attempts to open a door in the given direction. Forcing a stuck door costs a turn. */
     public ExplorationResult open(SaveGame save, Direction direction) {
         GameSession session = save.getSession();
+        ExplorationResult locked = requireNotInCombat(session);
+        if (locked != null) {
+            return locked;
+        }
         Character character = save.getCharacter();
         Room room = session.currentRoom();
         Exit exit = room.getExits().get(direction);
@@ -392,6 +424,10 @@ public class ExplorationService {
         inventory only if this succeeds. */
     public ExplorationResult spike(SaveGame save, Direction direction, boolean holdOpen) {
         GameSession session = save.getSession();
+        ExplorationResult locked = requireNotInCombat(session);
+        if (locked != null) {
+            return locked;
+        }
         Room room = session.currentRoom();
         Exit exit = room.getExits().get(direction);
         if (exit == null || !exit.isKnown() || exit.getDoor() == DoorState.NONE) {
@@ -423,6 +459,10 @@ public class ExplorationService {
         turn cost (matches the house rule that this is always rolled while moving at exploration speed). */
     public ExplorationResult listen(SaveGame save, Direction direction) {
         GameSession session = save.getSession();
+        ExplorationResult locked = requireNotInCombat(session);
+        if (locked != null) {
+            return locked;
+        }
         Room room = session.currentRoom();
         Exit exit = room.getExits().get(direction);
         if (exit == null || !exit.isKnown()) {
@@ -446,6 +486,10 @@ public class ExplorationService {
     /** Rests for one turn, resetting the fatigue clock; still burns light and risks a wandering
         monster like any other turn. */
     public ExplorationResult rest(SaveGame save) {
+        ExplorationResult locked = requireNotInCombat(save.getSession());
+        if (locked != null) {
+            return locked;
+        }
         ExplorationResult result = new ExplorationResult();
         result.add("The party rests for a turn, catching their breath.");
         advanceTurn(save, result, true);
@@ -658,7 +702,8 @@ public class ExplorationService {
     }
 
     /** A trap on the door's own lock/mechanism, sprung by forcing or picking it (not by walking
-        through) — same 2-in-6-unless-detected formula as every other trap here. */
+        through) — same 2-in-6-unless-detected formula as every other trap here. It springs on the
+        one doing the forcing/picking, not the front rank. */
     private void maybeSpringDoorTrap(SaveGame save, Exit exit, ExplorationResult result) {
         if (!exit.isDoorTrapped() || exit.isDoorTrapSprung() || exit.isDoorTrapDetected()) {
             return;
@@ -666,29 +711,64 @@ public class ExplorationService {
         if (dice.d(6) <= 2) {
             exit.setDoorTrapSprung(true);
             mirrorExitDoorTrapState(save.getSession(), exit);
-            applyTrapDamage(save, exit.getDoorTrapDamage(), exit.getDoorTrapDescription(), result);
+            applyTrapDamage(save, exit.getDoorTrapDamage(), exit.getDoorTrapDescription(),
+                    save.getCharacter(), result);
         }
     }
 
-    /** Rolls trap damage against the character with a saving throw for half; shared by room, corridor
-        and treasure traps. */
+    /** Rolls room/corridor trap damage against whoever is exposed at the front of the marching order
+        (see {@link #frontRankVictim}); door and treasure traps use the explicit-victim overload to hit
+        the opener/searcher instead. */
     private void applyTrapDamage(SaveGame save, DamageRoll damage, String description, ExplorationResult result) {
+        applyTrapDamage(save, damage, description, frontRankVictim(save), result);
+    }
+
+    /** Rolls trap damage against {@code victim} with a saving throw for half. The delve only ends when
+        no living PC remains (matching {@code CombatService}'s whole-party defeat rule) — a retainer's
+        death, or one PC of several falling, doesn't end it. */
+    private void applyTrapDamage(
+            SaveGame save, DamageRoll damage, String description, Combatant victim, ExplorationResult result) {
         GameSession session = save.getSession();
-        Character character = save.getCharacter();
         int amount = damage.roll(dice);
-        int saveTarget = SavingThrows.forCharacter(character.getCharacterClass(), character.getLevel())
+        Advanceable adv = (Advanceable) victim; // only PCs/retainers are ever picked — see frontRankVictim
+        int saveTarget = SavingThrows.forCharacter(adv.getCharacterClass(), adv.getLevel())
                 .paralysisPetrify();
         boolean saved = dice.d20() >= saveTarget;
         if (saved) {
             amount = Math.max(1, amount / 2);
         }
-        character.setCurrentHp(character.getCurrentHp() - amount);
-        result.add("**A trap springs — " + description + "!** You take " + amount
-                + " damage" + (saved ? " (saved for half)" : "") + ".");
-        if (!character.isAlive()) {
-            session.setState(SessionState.IN_TOWN);
-            result.add("**" + character.getName() + " has died in the dungeon.**");
+        victim.setCurrentHp(victim.getCurrentHp() - amount);
+        boolean solo = victim instanceof Character && save.getCharacters().size() == 1;
+        result.add("**A trap springs — " + description + "!** " + (solo ? "You take " : victim.getName() + " takes ")
+                + amount + " damage" + (saved ? " (saved for half)" : "") + ".");
+        if (!victim.isAlive()) {
+            if (victim instanceof Character && save.livingCharacters().isEmpty()) {
+                session.setState(SessionState.IN_TOWN);
+                result.add(solo
+                        ? "**" + victim.getName() + " has died in the dungeon.**"
+                        : "**Your party has been wiped out in the dungeon.**");
+            } else {
+                result.add("**" + victim.getName() + " has been slain by the trap.**");
+            }
         }
+    }
+
+    /** The trap's victim: a random living front-rank PC or retainer ({@link Formation#engagedFront} —
+        the person physically leading the way). The mule is never picked even when it marches up front:
+        an animal has no {@link SavingThrows} table (and no {@link Advanceable} class/level to look one
+        up by). Falls back to the primary PC if the front rank is somehow empty. */
+    private Combatant frontRankVictim(SaveGame save) {
+        int width = save.getSession().currentRoom().getCorridorWidth();
+        List<Combatant> eligible = new ArrayList<>();
+        for (Combatant c : Formation.engagedFront(save.fullOrder(), width)) {
+            if (c instanceof Advanceable) {
+                eligible.add(c);
+            }
+        }
+        if (eligible.isEmpty()) {
+            return save.getCharacter();
+        }
+        return eligible.get(dice.d(eligible.size()) - 1);
     }
 
     /** Total party size for the wandering-monster check: every living PC, every living retainer, and
@@ -723,10 +803,48 @@ public class ExplorationService {
         return characterClass == CharacterClass.ELF ? 2 : 1;
     }
 
+    /** The party's best active-search trap chance across every living PC — the whole party searches
+        together, so a Dwarf anywhere in a multi-PC party lends their 2-in-6, not just a Dwarf who
+        happens to be the first-rolled PC. */
+    private int bestTrapDetectionChance(SaveGame save) {
+        int best = 1;
+        for (Character pc : save.livingCharacters()) {
+            best = Math.max(best, trapDetectionChance(pc.getCharacterClass()));
+        }
+        return best;
+    }
+
+    /** As {@link #bestTrapDetectionChance}, for secret doors (an Elf PC anywhere in the party). */
+    private int bestSecretDoorChance(SaveGame save) {
+        int best = 1;
+        for (Character pc : save.livingCharacters()) {
+            best = Math.max(best, secretDoorChance(pc.getCharacterClass()));
+        }
+        return best;
+    }
+
+    /** The living PC with the best Remove Traps chance — the highest-level Thief if the party has one,
+        else the primary PC (every non-Thief shares the same flat fallback chance). */
+    private Character bestDisarmer(SaveGame save) {
+        Character best = save.getCharacter();
+        int bestChance = -1;
+        for (Character pc : save.livingCharacters()) {
+            int chance = pc.getCharacterClass() == CharacterClass.THIEF
+                    ? ThiefSkills.removeTraps(pc.getLevel())
+                    : NON_THIEF_REMOVE_TRAPS_CHANCE;
+            if (chance > bestChance) {
+                bestChance = chance;
+                best = pc;
+            }
+        }
+        return best;
+    }
+
     private boolean anyLivingPartyMemberIsClass(SaveGame save, CharacterClass characterClass) {
-        Character character = save.getCharacter();
-        if (character.isAlive() && character.getCharacterClass() == characterClass) {
-            return true;
+        for (Character pc : save.livingCharacters()) {
+            if (pc.getCharacterClass() == characterClass) {
+                return true;
+            }
         }
         for (Retainer r : save.livingRetainers()) {
             if (r.getCharacterClass() == characterClass) {

@@ -561,6 +561,77 @@ class DungeonExplorationTest {
         assertThat(save.getSession().getState()).isEqualTo(SessionState.IN_COMBAT);
     }
 
+    // --- in-combat gate ------------------------------------------------------
+
+    @Test
+    void everyExplorationActionExceptLookIsRefusedMidCombat() {
+        Dice dice = new Dice(new Random(31));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
+        SaveGame save = twoRoomSave(dice, 9);
+        Room room = save.getSession().currentRoom();
+        room.setStairsDown(true);
+        room.setStairsDestinationLevel(0);
+        room.setStairsDestinationRoomId(1);
+        save.getSession().setState(SessionState.IN_COMBAT);
+
+        var attempts = java.util.List.of(
+                service.move(save, Direction.EAST),
+                service.useStairs(save, true),
+                service.search(save),
+                service.open(save, Direction.EAST),
+                service.spike(save, Direction.EAST, false),
+                service.listen(save, Direction.EAST),
+                service.rest(save));
+
+        for (var result : attempts) {
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.text()).contains("locked in combat");
+        }
+        // Nothing moved, nothing ticked: escaping a fight is flee's job alone.
+        assertThat(save.getSession().getCurrentRoomId()).isZero();
+        assertThat(save.getSession().getDungeonTurn()).isZero();
+        assertThat(save.getSession().getState()).isEqualTo(SessionState.IN_COMBAT);
+    }
+
+    // --- multi-PC trap deaths -----------------------------------------------
+
+    @Test
+    void aTrapDeathOnlyEndsTheDelveWhenNoPcRemains() {
+        Dice dice = new Dice(new Random(7));
+        ExplorationService service = new ExplorationService(dice, new DungeonGenerator(dice), new CombatService(dice, new SpellService(dice)), new LightingService(), new MuleService());
+        SaveGame save = twoRoomSave(dice, 9);
+        Character second = new CharacterFactory(new Dice(new Random(2)))
+                .create("Backup", CharacterClass.FIGHTER, new AbilityScores(13, 9, 9, 12, 14, 9));
+        save.addCharacter(second);
+
+        // A trapped treasure is disarmed by the party's best hand — deterministically the primary PC
+        // here (two non-Thieves share the flat chance; the first wins ties) — and a fumbled disarm
+        // springs the trap on that PC. At 1 hp any hit (even saved-for-half, floored at 1) kills.
+        Room room = save.getSession().currentRoom();
+        room.setHasTreasure(true);
+        room.setTreasureGold(50);
+        room.setTreasureTrapped(true);
+        room.setTreasureTrapDescription("a poisoned needle");
+        room.setTreasureTrapDamage(new DamageRoll(1, 6));
+        save.getCharacter().setCurrentHp(1);
+
+        for (int i = 0; i < 200 && save.getCharacter().isAlive(); i++) {
+            room.setTreasureTrapDisarmed(false);
+            room.setSearched(false);
+            room.setLooted(false);
+            service.search(save);
+            // Neutralize any wandering monster so the next search isn't combat-gated.
+            save.getSession().setState(SessionState.EXPLORING);
+            save.getSession().setCombat(null);
+            save.getSession().currentRoom().setCleared(true);
+        }
+
+        assertThat(save.getCharacter().isAlive()).isFalse();
+        assertThat(save.livingCharacters()).containsExactly(second);
+        // The delve continues: one PC falling is not a party wipe.
+        assertThat(save.getSession().getState()).isNotEqualTo(SessionState.IN_TOWN);
+    }
+
     // --- helpers -----------------------------------------------------------
 
     private SaveGame newSaveWithCharacter(int torches) {

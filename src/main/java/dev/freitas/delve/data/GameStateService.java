@@ -2,12 +2,20 @@ package dev.freitas.delve.data;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.freitas.delve.game.model.SaveGame;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /**
  * Typed access to a player's {@link SaveGame}, layered over {@link PlayerSaveService}: it
  * (de)serializes the JSON blob with Jackson so commands work with game objects rather than strings.
+ *
+ * <p>Also owns the per-player action lock ({@link #withUserLock}): a whole action is a
+ * load → mutate → save cycle spanning several calls here, and two front ends (Discord commands on
+ * virtual threads, the web API) can act on the same save concurrently — without the lock the later
+ * save silently overwrites the earlier one's changes.
  */
 @Service
 public class GameStateService {
@@ -15,9 +23,32 @@ public class GameStateService {
     private final PlayerSaveService playerSaves;
     private final ObjectMapper objectMapper;
 
+    // One lock per player who has acted this process lifetime (never removed — a few dozen small
+    // entries at most for a bot this size). ReentrantLock, not synchronized, so virtual threads
+    // don't pin their carrier while blocked.
+    private final ConcurrentHashMap<Long, ReentrantLock> userLocks = new ConcurrentHashMap<>();
+
     public GameStateService(PlayerSaveService playerSaves, ObjectMapper objectMapper) {
         this.playerSaves = playerSaves;
         this.objectMapper = objectMapper;
+    }
+
+    /** This player's action lock — for callers (the web interceptor) whose acquire and release sites
+        are two separate lifecycle callbacks and so can't pass a lambda to {@link #withUserLock}. */
+    public ReentrantLock userLock(long discordUserId) {
+        return userLocks.computeIfAbsent(discordUserId, id -> new ReentrantLock());
+    }
+
+    /** Runs one player action holding that player's lock, so a concurrent command/web request for the
+        same player waits instead of interleaving its load → mutate → save with this one. */
+    public <T> T withUserLock(long discordUserId, Supplier<T> action) {
+        ReentrantLock lock = userLock(discordUserId);
+        lock.lock();
+        try {
+            return action.get();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /** Loads the player's save, or a fresh empty one if they have never played. */

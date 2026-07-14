@@ -125,7 +125,12 @@ public class CommandManager {
 
     private void invoke(Command command, CommandContext ctx) {
         try {
-            command.invoke(ctx);
+            // Hold the invoker's action lock for the whole command, so a double-sent command or a
+            // simultaneous web request can't interleave its load→mutate→save with this one's.
+            ctx.getBeans().gameState.withUserLock(ctx.getInvokerUserId(), () -> {
+                command.invoke(ctx);
+                return null;
+            });
         } catch (Throwable t) {
             ctx.handleException(t);
         }
