@@ -45,7 +45,7 @@ module.exports = {
     // failure, since gradle itself always uses the toolchain JDK regardless of what's first on PATH.
     interpreter: "C:\\Users\\justi\\.jdks\\azul-25.0.2\\bin\\java.exe",
     // --enable-native-access=ALL-UNNAMED silences the Java 25 restricted-method warning (matches bootRun).
-    interpreter_args: "--enable-native-access=ALL-UNNAMED -jar",
+    interpreter_args: "--enable-native-access=ALL-UNNAMED -XX:+UseSerialGC -Xms32m -Xmx192m -XX:MaxMetaspaceSize=128m -jar",
     cwd: __dirname,            // H2 ./database + delve.env resolve relative to the repo root
     autorestart: true,        // PM2 owns the JVM PID, so crash-restart works
     watch: false,
