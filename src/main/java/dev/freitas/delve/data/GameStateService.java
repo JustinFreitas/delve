@@ -1,8 +1,9 @@
 package dev.freitas.delve.data;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.freitas.delve.game.model.SaveGame;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -23,10 +24,10 @@ public class GameStateService {
     private final PlayerSaveService playerSaves;
     private final ObjectMapper objectMapper;
 
-    // One lock per player who has acted this process lifetime (never removed — a few dozen small
-    // entries at most for a bot this size). ReentrantLock, not synchronized, so virtual threads
-    // don't pin their carrier while blocked.
-    private final ConcurrentHashMap<Long, ReentrantLock> userLocks = new ConcurrentHashMap<>();
+    // Per-player action lock cached with Caffeine weak values: as long as a caller holds a reference to
+    // the lock (during withUserLock or an active HTTP request in UserActionLockFilter), the lock stays in
+    // memory. Once released and unreferenced, garbage collection reclaims it cleanly.
+    private final Cache<Long, ReentrantLock> userLocks = Caffeine.newBuilder().weakValues().build();
 
     public GameStateService(PlayerSaveService playerSaves, ObjectMapper objectMapper) {
         this.playerSaves = playerSaves;
@@ -36,7 +37,7 @@ public class GameStateService {
     /** This player's action lock — for callers (the web interceptor) whose acquire and release sites
         are two separate lifecycle callbacks and so can't pass a lambda to {@link #withUserLock}. */
     public ReentrantLock userLock(long discordUserId) {
-        return userLocks.computeIfAbsent(discordUserId, id -> new ReentrantLock());
+        return userLocks.get(discordUserId, id -> new ReentrantLock());
     }
 
     /** Runs one player action holding that player's lock, so a concurrent command/web request for the

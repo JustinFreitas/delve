@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,6 +37,12 @@ public class DmController {
     @GetMapping("/modules")
     public List<String> modules() {
         return game.listModules();
+    }
+
+    @GetMapping("/modules/{name}")
+    public ResponseEntity<Map<String, Object>> moduleDetails(@PathVariable String name) {
+        Map<String, Object> details = game.moduleDetails(name);
+        return details == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(details);
     }
 
     @PostMapping("/dm/roster")

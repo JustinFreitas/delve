@@ -637,6 +637,26 @@ public class GameFacade {
         return ModuleLoader.listModules();
     }
 
+    public Map<String, Object> moduleDetails(String moduleName) {
+        if (blankToNull(moduleName) == null) {
+            return null;
+        }
+        ModuleLoader.LoadedModule loaded = ModuleLoader.load(moduleName);
+        if (loaded == null) {
+            return null;
+        }
+        int totalRooms = loaded.dungeon().getLevels().stream()
+                .mapToInt(l -> l.getRooms().size())
+                .sum();
+        return Map.of(
+                "name", moduleName,
+                "title", loaded.title(),
+                "levels", loaded.dungeon().levelCount(),
+                "totalRooms", totalRooms,
+                "warnings", loaded.warnings()
+        );
+    }
+
     public List<Map<String, Object>> roster(int count, int level, String classToken) {
         CharacterClass fixed = blankToNull(classToken) == null ? null : CharacterClass.parse(classToken);
         List<Character> party = pregen.createBatch(Math.max(1, Math.min(count, 8)), level, fixed, null);
