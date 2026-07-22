@@ -165,6 +165,34 @@ class GameFacadeTest {
         assertThat(result.lines().get(0)).contains("No character named");
     }
 
+    // --- enter: whole-party life check, not primary-only -----------------------
+
+    @Test
+    void enterStillStartsADelveWhenThePrimaryPcIsDeadButAnotherLives() {
+        facade.rollCharacter(USER, "fighter", "Conan");
+        facade.rollCharacter(USER, "cleric", "Brother Tuck");
+        SaveGame save = store.get(USER);
+        save.getCharacter().setCurrentHp(0); // primary (Conan) is down; Tuck still stands
+
+        ActionResult result = facade.enter(USER, null);
+
+        assertThat(result.ok()).isTrue();
+        assertThat(save.getSession().isInDungeon()).isTrue();
+    }
+
+    @Test
+    void enterIsBlockedOnlyWhenTheWholePartyIsDead() {
+        facade.rollCharacter(USER, "fighter", "Conan");
+        facade.rollCharacter(USER, "cleric", "Brother Tuck");
+        SaveGame save = store.get(USER);
+        save.getCharacters().forEach(pc -> pc.setCurrentHp(0));
+
+        ActionResult result = facade.enter(USER, null);
+
+        assertThat(result.ok()).isFalse();
+        assertThat(save.getSession().isInDungeon()).isFalse();
+    }
+
     // --- party(): matches PartySummary exactly ---------------------------------
 
     @Test

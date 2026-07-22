@@ -91,6 +91,14 @@ public class SaveGame {
         if (characters.size() >= MAX_CHARACTERS) {
             return false;
         }
+        // Solo → multi-PC transition: the sole PC's marching-order slot was persisted as the reserved
+        // PLAYER_SLOT ("@you") token, which resolve() maps back to a PC only while exactly one exists.
+        // Rewrite it to that PC's real name before the second PC lands, so their explicit /order
+        // placement survives instead of resolving to null and being dropped to the toughness-sorted tail.
+        if (characters.size() == 1) {
+            String primaryName = characters.get(0).getName();
+            marchingOrder.replaceAll(token -> PLAYER_SLOT.equalsIgnoreCase(token) ? primaryName : token);
+        }
         characters.add(character);
         return true;
     }

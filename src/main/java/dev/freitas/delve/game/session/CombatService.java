@@ -695,23 +695,35 @@ public class CombatService {
         if (alive == 0 || alive == encounter.getInitialCount()) {
             return; // no losses yet
         }
+        // "Half or fewer of the original numbers remain" — for 5 that's 2 (3 dead), not 3. Compare
+        // alive*2 to initialCount so odd starting sizes don't round the trigger up a casualty early.
         boolean dueFirst = !encounter.isFirstCasualtyChecked() && alive < encounter.getInitialCount();
-        boolean dueHalf = !encounter.isHalfLossChecked() && alive <= (encounter.getInitialCount() + 1) / 2;
+        boolean dueHalf = !encounter.isHalfLossChecked() && alive * 2 <= encounter.getInitialCount();
+        // Each trigger is an independent B/X morale check; when a single casualty crosses both at once
+        // (e.g. the first kill in a group of 3), each still gets its own 2d6 roll rather than sharing one.
         if (dueFirst) {
             encounter.setFirstCasualtyChecked(true);
+            if (rollMoraleBreak(save, encounter, result)) {
+                return;
+            }
         }
         if (dueHalf) {
             encounter.setHalfLossChecked(true);
+            rollMoraleBreak(save, encounter, result);
         }
-        if (!dueFirst && !dueHalf) {
-            return;
-        }
+    }
+
+    /** One 2d6 morale check for {@code encounter}: breaks (and narrates) on a failure. Returns whether
+        morale broke, so a caller crossing both triggers in one round can stop after the first break. */
+    private boolean rollMoraleBreak(SaveGame save, CombatEncounter encounter, ExplorationResult result) {
         MonsterType type = encounter.aliveMonsters().get(0).getType();
         int modifier = situationalMoraleModifier(save, encounter);
         if (dice.roll2d6() > type.morale() + modifier) {
             encounter.setMoraleBroken(true);
             result.add("The surviving " + type.name().toLowerCase() + "s break and flee!");
+            return true;
         }
+        return false;
     }
 
     /** A rough automated stand-in for the house rule's "referee may apply -1/+1 based on the situation":

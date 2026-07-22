@@ -429,7 +429,23 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
   Druid shapechange, mounted combat, alignment-gated rules, followers/strongholds, and per-character (vs.
   whole-party) surprise — see the updated Known Gap below for the full list.
 
-All milestones are complete (421 tests green).
+- **Milestone 25** — code-review pass: correctness fixes + multi-PC parity.
+  - **Confirmed-bug fixes** — the solo→multi-PC transition now rewrites a lone PC's reserved `@you`
+    marching-order token to their real name in `SaveGame.addCharacter` (it previously resolved to null
+    once a 2nd PC existed, silently dropping their explicit `/order` placement into the toughness tail);
+    B/X morale's half-loss trigger is `alive * 2 <= initialCount` (the old `(n+1)/2` fired a casualty
+    early on odd-sized groups), and when one round crosses both the first-casualty and half-loss
+    thresholds at once each gets its own 2d6 check (`rollMoraleBreak`) rather than sharing one roll; and
+    the web `GameFacade.enter` gate is now the whole-party `livingCharacters().isEmpty()` (it was keyed
+    to the primary PC only, softlocking web play after the first-rolled PC died while others still lived
+    — Discord's `EnterCommand` was already correct).
+  - **Multi-PC exploration parity** — `/open` now uses the party's strongest living PC to force a stuck
+    door, any living Thief (not just the first-rolled PC) to pick a lock, and springs a door trap on
+    whoever's actually working the door; encounter reaction rolls use the party's best-Charisma PC; and
+    arriving by stairs runs the same passive trap/secret-door sense and trap-springing that walking in
+    through a door already did. All mirror the "best across the party" pattern `/search` already used.
+
+All milestones are complete (434 tests green).
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
   doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps

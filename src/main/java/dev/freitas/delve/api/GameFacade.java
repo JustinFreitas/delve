@@ -192,8 +192,12 @@ public class GameFacade {
         if (!save.hasCharacter()) {
             return fail(save, "Roll or generate a character first.");
         }
-        if (!save.getCharacter().isAlive()) {
-            return fail(save, "Your character has died. Roll a new one.");
+        // Whole-party check, not just the first-rolled PC: a multi-PC party can still delve as long as
+        // any PC survives, even if the primary PC (slot 0) has died. Mirrors EnterCommand.
+        if (save.livingCharacters().isEmpty()) {
+            return fail(save, save.getCharacters().size() == 1
+                    ? "Your character has died. Roll a new one."
+                    : "Your whole party has died. Roll a new character.");
         }
         if (save.getSession().isInDungeon()) {
             return fail(save, "You are already delving. Use look.");

@@ -11,6 +11,7 @@ import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.model.Character;
 import dev.freitas.delve.game.model.Retainer;
 import dev.freitas.delve.game.model.SaveGame;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
@@ -94,6 +95,26 @@ class MarchingOrderTest {
         bryn.setCurrentHp(0); // a casualty in a different column must not shift anyone else's position
         int coraRankAfter = Formation.nominalRank(save.fullOrder(), width, cora);
         assertThat(coraRankAfter).isEqualTo(coraRankBefore);
+    }
+
+    @Test
+    void soloOrderPlacementSurvivesAddingASecondPc() {
+        SaveGame save = new SaveGame();
+        Character hero = characterFactory.create("Hero", CharacterClass.MAGIC_USER, NEUTRAL_ABILITIES);
+        save.setCharacter(hero);
+        forceStats(hero, Armor.NONE, false, 4); // squishy: would sort to the back on toughness alone
+
+        // A solo /order places the sole PC up front — persisted as the reserved @you token.
+        save.setMarchingOrder(new ArrayList<>(List.of(SaveGame.PLAYER_SLOT)));
+
+        Character tank = characterFactory.create("Tank", CharacterClass.FIGHTER, NEUTRAL_ABILITIES);
+        forceStats(tank, Armor.CHAIN_MAIL, true, 20); // tougher: would seize the front if the hero were dropped
+        assertThat(save.addCharacter(tank)).isTrue();
+
+        // @you was rewritten to the hero's real name on the transition, so their explicit front
+        // placement survives instead of resolving to null and falling into the toughness-sorted tail.
+        assertThat(save.getMarchingOrder()).containsExactly("Hero");
+        assertThat(save.fullOrder().get(0)).isEqualTo(hero);
     }
 
     /** Pins a combatant's AC-relevant stats to fixed values (same neutral abilities across every call,

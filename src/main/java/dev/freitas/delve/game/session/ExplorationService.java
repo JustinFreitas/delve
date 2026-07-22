@@ -195,6 +195,13 @@ public class ExplorationService {
         result.add(down ? "You descend the stairs, deeper into the dark." : "You climb the stairs.");
         result.add("Now on dungeon level " + (session.getCurrentLevel() + 1) + ".");
         advanceTurn(save, result, false);
+
+        // A room entered by stairs gets the same passive trap/secret-door sense and trap-springing that
+        // entering by a door (move) does — otherwise the same room behaves differently by entry path.
+        maybePassiveRoomTrapSense(save, result);
+        maybeSpringTrap(save, result);
+        maybePassiveSecretDoorSense(save, result);
+
         result.add("");
         result.add(describeRoom(session));
         handleEncounter(save, result);
@@ -358,7 +365,6 @@ public class ExplorationService {
         if (locked != null) {
             return locked;
         }
-        Character character = save.getCharacter();
         Room room = session.currentRoom();
         Exit exit = room.getExits().get(direction);
 
@@ -376,8 +382,10 @@ public class ExplorationService {
             }
             case STUCK -> {
                 ExplorationResult result = new ExplorationResult();
-                maybeSpringDoorTrap(save, exit, result);
-                int threshold = Math.max(1, Math.min(5, 2 + character.getAbilities().modifier(Ability.STR)));
+                // The strongest living PC throws their shoulder at it — not always the first-rolled PC.
+                Character forcer = strongestPc(save);
+                maybeSpringDoorTrap(save, exit, forcer, result);
+                int threshold = Math.max(1, Math.min(5, 2 + forcer.getAbilities().modifier(Ability.STR)));
                 boolean forced = dice.d(6) <= threshold;
                 result.add("You throw your shoulder against the stuck door...");
                 if (forced) {
@@ -390,13 +398,16 @@ public class ExplorationService {
                 return result;
             }
             case LOCKED -> {
-                if (character.getCharacterClass() != CharacterClass.THIEF) {
+                // Any living Thief PC can pick it (the highest-level one, best odds) — not only the
+                // first-rolled PC. A party with no Thief anywhere still needs a key.
+                Character picker = bestLockpicker(save);
+                if (picker == null) {
                     return ExplorationResult.failure("The door to the " + direction.lower()
                             + " is locked. You need a key or a thief's touch.");
                 }
                 ExplorationResult result = new ExplorationResult();
-                maybeSpringDoorTrap(save, exit, result);
-                boolean picked = dice.d(100) <= ThiefSkills.openLocks(character.getLevel());
+                maybeSpringDoorTrap(save, exit, picker, result);
+                boolean picked = dice.d(100) <= ThiefSkills.openLocks(picker.getLevel());
                 if (picked) {
                     exit.setEverLocked(true);
                     mirrorEverLocked(session, exit);
@@ -704,15 +715,14 @@ public class ExplorationService {
     /** A trap on the door's own lock/mechanism, sprung by forcing or picking it (not by walking
         through) — same 2-in-6-unless-detected formula as every other trap here. It springs on the
         one doing the forcing/picking, not the front rank. */
-    private void maybeSpringDoorTrap(SaveGame save, Exit exit, ExplorationResult result) {
+    private void maybeSpringDoorTrap(SaveGame save, Exit exit, Character actor, ExplorationResult result) {
         if (!exit.isDoorTrapped() || exit.isDoorTrapSprung() || exit.isDoorTrapDetected()) {
             return;
         }
         if (dice.d(6) <= 2) {
             exit.setDoorTrapSprung(true);
             mirrorExitDoorTrapState(save.getSession(), exit);
-            applyTrapDamage(save, exit.getDoorTrapDamage(), exit.getDoorTrapDescription(),
-                    save.getCharacter(), result);
+            applyTrapDamage(save, exit.getDoorTrapDamage(), exit.getDoorTrapDescription(), actor, result);
         }
     }
 
@@ -840,6 +850,49 @@ public class ExplorationService {
         return best;
     }
 
+    /** The living PC with the highest Strength — who throws their shoulder at a stuck door. Falls back
+        to the primary PC when there are somehow no living PCs. */
+    private Character strongestPc(SaveGame save) {
+        Character best = save.getCharacter();
+        int bestStr = Integer.MIN_VALUE;
+        for (Character pc : save.livingCharacters()) {
+            int str = pc.getAbilities().score(Ability.STR);
+            if (str > bestStr) {
+                bestStr = str;
+                best = pc;
+            }
+        }
+        return best;
+    }
+
+    /** The living PC with the highest Charisma — the party "face" whose reaction bonus applies when the
+        whole party meets a monster. Falls back to the primary PC. */
+    private Character bestCharismaPc(SaveGame save) {
+        Character best = save.getCharacter();
+        int bestCha = Integer.MIN_VALUE;
+        for (Character pc : save.livingCharacters()) {
+            int cha = pc.getAbilities().score(Ability.CHA);
+            if (cha > bestCha) {
+                bestCha = cha;
+                best = pc;
+            }
+        }
+        return best;
+    }
+
+    /** The living Thief PC best able to pick a lock (highest level, best {@code openLocks} odds), or
+        {@code null} if the party has no living Thief — locks stay a Thief-only skill, but any Thief in
+        a multi-PC party can try, not just the first-rolled PC. */
+    private Character bestLockpicker(SaveGame save) {
+        Character best = null;
+        for (Character pc : save.livingCharacters()) {
+            if (pc.getCharacterClass() == CharacterClass.THIEF && (best == null || pc.getLevel() > best.getLevel())) {
+                best = pc;
+            }
+        }
+        return best;
+    }
+
     private boolean anyLivingPartyMemberIsClass(SaveGame save, CharacterClass characterClass) {
         for (Character pc : save.livingCharacters()) {
             if (pc.getCharacterClass() == characterClass) {
@@ -923,7 +976,7 @@ public class ExplorationService {
         MonsterType type = Bestiary.byName(room.getMonsterName());
         result.add("");
         MonsterDisposition scripted = room.getScriptedDisposition();
-        ReactionTier reaction = scripted == null ? combat.reaction(save.getCharacter(), type) : null;
+        ReactionTier reaction = scripted == null ? combat.reaction(bestCharismaPc(save), type) : null;
         boolean hostile = scripted != null ? scripted == MonsterDisposition.HOSTILE : reaction.isHostile();
         if (hostile) {
             result.getLines().addAll(combat.startCombat(save).getLines());
