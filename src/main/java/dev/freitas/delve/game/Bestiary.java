@@ -1,6 +1,8 @@
 package dev.freitas.delve.game;
 
 import dev.freitas.delve.game.engine.DamageRoll;
+import dev.freitas.delve.game.engine.MissileRangeTable;
+import dev.freitas.delve.game.engine.RangedAttack;
 import dev.freitas.delve.game.model.AttackEffect;
 import dev.freitas.delve.game.model.MonsterType;
 import java.util.LinkedHashMap;
@@ -17,18 +19,30 @@ public final class Bestiary {
 
     // moveRate (feet/turn) is a proposed default per monster, consistent in spirit with this file's
     // existing approximated AC/HD/morale values — adjustable later.
+
+    // Missile ranges for the armed humanoids below (feet; Short/Medium/Long), matching WeaponCatalog's
+    // own short-bow and sling tables so a goblin's bow and a PC's bow reach exactly the same. A
+    // conservative starter set — the classic B/X humanoid archers carry a weapon and freely fire it
+    // during the approach; add or remove `.withRanged(...)` below to taste (a pure content/tuning call).
+    private static final RangedAttack SHORT_BOW = new RangedAttack(new DamageRoll(1, 6), new MissileRangeTable(50, 100, 150));
+    private static final RangedAttack SLING = new RangedAttack(new DamageRoll(1, 4), new MissileRangeTable(40, 80, 160));
+
     public static final MonsterType GOBLIN =
-            new MonsterType("Goblin", 1, -1, 6, new DamageRoll(1, 6), 7, 5, "2d4", 60, AttackEffect.NORMAL);
+            new MonsterType("Goblin", 1, -1, 6, new DamageRoll(1, 6), 7, 5, "2d4", 60, AttackEffect.NORMAL)
+                    .withRanged(SHORT_BOW);
     public static final MonsterType KOBOLD =
-            new MonsterType("Kobold", 1, -1, 7, new DamageRoll(1, 4), 6, 5, "4d4", 60, AttackEffect.NORMAL);
+            new MonsterType("Kobold", 1, -1, 7, new DamageRoll(1, 4), 6, 5, "4d4", 60, AttackEffect.NORMAL)
+                    .withRanged(SLING);
     public static final MonsterType SKELETON =
             new MonsterType("Skeleton", 1, 0, 7, new DamageRoll(1, 6), 12, 10, "3d4", 60, AttackEffect.NORMAL, true);
     public static final MonsterType ORC =
-            new MonsterType("Orc", 1, 0, 6, new DamageRoll(1, 6), 8, 10, "2d4", 60, AttackEffect.NORMAL);
+            new MonsterType("Orc", 1, 0, 6, new DamageRoll(1, 6), 8, 10, "2d4", 60, AttackEffect.NORMAL)
+                    .withRanged(SHORT_BOW);
     public static final MonsterType STIRGE =
             new MonsterType("Stirge", 1, 0, 7, new DamageRoll(1, 3), 9, 13, "1d10", 30, AttackEffect.NORMAL);
     public static final MonsterType HOBGOBLIN =
-            new MonsterType("Hobgoblin", 1, 1, 6, new DamageRoll(1, 8), 8, 15, "1d6", 90, AttackEffect.NORMAL);
+            new MonsterType("Hobgoblin", 1, 1, 6, new DamageRoll(1, 8), 8, 15, "1d6", 90, AttackEffect.NORMAL)
+                    .withRanged(SHORT_BOW);
     public static final MonsterType ZOMBIE =
             new MonsterType("Zombie", 2, 0, 8, new DamageRoll(1, 8), 12, 20, "2d4", 60, AttackEffect.NORMAL, true);
     public static final MonsterType GIANT_RAT =

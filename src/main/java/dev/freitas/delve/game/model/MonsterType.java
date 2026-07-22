@@ -2,6 +2,7 @@ package dev.freitas.delve.game.model;
 
 import dev.freitas.delve.game.engine.CombatTables;
 import dev.freitas.delve.game.engine.DamageRoll;
+import dev.freitas.delve.game.engine.RangedAttack;
 
 /**
  * An immutable B/X monster stat block (the template). Hit Dice are d8 in B/X; a "+" bonus adds to HP
@@ -23,6 +24,9 @@ import dev.freitas.delve.game.engine.DamageRoll;
  * @param undead           whether this is undead: always-hostile (no reaction roll) and turnable by a
  *                         Cleric — a stat-block fact here rather than a name list in
  *                         {@code CombatService}, so a new undead type can't silently miss those rules
+ * @param ranged           an optional missile attack (bow, sling, thrown, breath) fired during the
+ *                         approach under the same B/X missile rules a PC uses; {@code null} for the
+ *                         majority of monsters, which have only their melee {@code attack}
  */
 public record MonsterType(
         String name,
@@ -35,9 +39,10 @@ public record MonsterType(
         String numberAppearing,
         int moveRate,
         AttackEffect effect,
-        boolean undead) {
+        boolean undead,
+        RangedAttack ranged) {
 
-    /** Convenience for living monsters, the common case. */
+    /** Convenience for living monsters with no missile attack, the common case. */
     public MonsterType(
             String name,
             int hitDiceCount,
@@ -50,7 +55,31 @@ public record MonsterType(
             int moveRate,
             AttackEffect effect) {
         this(name, hitDiceCount, hitDiceBonus, armorClass, attack, morale, xpValue, numberAppearing,
-                moveRate, effect, false);
+                moveRate, effect, false, null);
+    }
+
+    /** Convenience for undead (or any melee-only monster that names its {@code undead} flag). */
+    public MonsterType(
+            String name,
+            int hitDiceCount,
+            int hitDiceBonus,
+            int armorClass,
+            DamageRoll attack,
+            int morale,
+            int xpValue,
+            String numberAppearing,
+            int moveRate,
+            AttackEffect effect,
+            boolean undead) {
+        this(name, hitDiceCount, hitDiceBonus, armorClass, attack, morale, xpValue, numberAppearing,
+                moveRate, effect, undead, null);
+    }
+
+    /** A copy of this type armed with {@code ranged} — how {@code Bestiary} declares missile-armed
+        monsters without a constructor variant per combination of optional fields. */
+    public MonsterType withRanged(RangedAttack ranged) {
+        return new MonsterType(name, hitDiceCount, hitDiceBonus, armorClass, attack, morale, xpValue,
+                numberAppearing, moveRate, effect, undead, ranged);
     }
 
     /** This monster's THAC0, derived from its Hit Dice. */

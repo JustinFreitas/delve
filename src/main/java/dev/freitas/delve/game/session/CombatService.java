@@ -13,6 +13,7 @@ import dev.freitas.delve.game.engine.Formation;
 import dev.freitas.delve.game.engine.Leveling;
 import dev.freitas.delve.game.engine.MuleRules;
 import dev.freitas.delve.game.engine.RangeBand;
+import dev.freitas.delve.game.engine.RangedAttack;
 import dev.freitas.delve.game.engine.ReactionTier;
 import dev.freitas.delve.game.engine.SavingThrows;
 import dev.freitas.delve.game.engine.Spell;
@@ -299,12 +300,12 @@ public class CombatService {
             if (partyActs) {
                 playerAction.run();
             }
-            if (!encounter.isOver() && monstersActEligible && encounter.isMelee()) {
-                monstersAttackParty(save, result);
+            if (!encounter.isOver() && monstersActEligible) {
+                monstersAct(save, result);
             }
         } else {
-            if (monstersActEligible && encounter.isMelee()) {
-                monstersAttackParty(save, result);
+            if (monstersActEligible) {
+                monstersAct(save, result);
             }
             if (!save.livingCharacters().isEmpty() && !encounter.aliveMonsters().isEmpty() && partyActs) {
                 playerAction.run();
@@ -555,6 +556,18 @@ public class CombatService {
         }
     }
 
+    /** One monster side-turn: a melee attack while in contact, otherwise a missile volley from whichever
+        monsters carry a ranged attack — the rest simply keep closing (see {@link #closeDistance}). B/X
+        places no monster-specific restriction on missile fire, so an armed monster shoots during the
+        approach under the same rules the party's own missile fire already follows. */
+    private void monstersAct(SaveGame save, ExplorationResult result) {
+        if (save.getSession().getCombat().isMelee()) {
+            monstersAttackParty(save, result);
+        } else {
+            monstersFireMissiles(save, result);
+        }
+    }
+
     private void monstersAttackParty(SaveGame save, ExplorationResult result) {
         CombatEncounter encounter = save.getSession().getCombat();
         int width = save.getSession().currentRoom().getCorridorWidth();
@@ -577,21 +590,63 @@ public class CombatService {
                     return;
                 }
             } else if (outcome.hit()) {
-                int damage = type.attack().roll(dice);
-                target.setCurrentHp(target.getCurrentHp() - damage);
-                result.add("The " + type.name().toLowerCase() + " hits " + victim + " for " + damage + " damage"
-                        + (target.isAlive() ? "." : (target instanceof Character ? "." : " — " + target.getName() + " falls!")));
-                if (target instanceof Mule mule && !mule.isAlive()) {
-                    save.getMules().remove(mule);
-                    recoverMuleCargo(save, mule, result);
-                }
-                if (target instanceof Character && save.livingCharacters().isEmpty()) {
+                if (applyMonsterDamage(save, target, type.attack().roll(dice), type, "hits", victim, result)) {
                     return;
                 }
             } else {
                 result.add("The " + type.name().toLowerCase() + " misses " + victim + ".");
             }
         }
+    }
+
+    /** Pre-melee missile volley: every alive monster with a {@link MonsterType#ranged()} attack shoots a
+        front-rank party member if the party is within its range bands, resolved with the same range-band
+        to-hit math the party's missile fire uses. Monsters without a ranged attack — or out of Long range
+        this round — do nothing here and keep closing. */
+    private void monstersFireMissiles(SaveGame save, ExplorationResult result) {
+        CombatEncounter encounter = save.getSession().getCombat();
+        int width = save.getSession().currentRoom().getCorridorWidth();
+        boolean solo = save.getCharacters().size() == 1;
+        for (Monster monster : encounter.aliveMonsters()) {
+            MonsterType type = monster.getType();
+            RangedAttack ranged = type.ranged();
+            if (ranged == null) {
+                continue;
+            }
+            RangeBand band = ranged.range().band(encounter.getDistanceFeet());
+            if (band == null) {
+                continue; // still beyond Long range this round
+            }
+            List<Combatant> targetable = Formation.engagedFront(save.fullOrder(), width);
+            if (targetable.isEmpty()) {
+                return;
+            }
+            Combatant target = targetable.get(dice.d(targetable.size()) - 1);
+            String victim = (target instanceof Character && solo) ? "you" : target.getName();
+            var outcome = AttackResolver.resolve(dice.d20(), band.toHitModifier(), type.thac0(), target.armorClass());
+            if (outcome.hit()) {
+                if (applyMonsterDamage(save, target, ranged.damage().roll(dice), type, "shoots", victim, result)) {
+                    return;
+                }
+            } else {
+                result.add("The " + type.name().toLowerCase() + " shoots at " + victim + " and misses.");
+            }
+        }
+    }
+
+    /** Applies {@code damage} from {@code type} to {@code target}: HP loss, a "{@code hitVerb}" narration
+        line, and a fallen mule's cargo spill. Shared by the melee and missile monster-attack paths.
+        Returns {@code true} if this drops the party's last living PC, so the caller stops resolving. */
+    private boolean applyMonsterDamage(SaveGame save, Combatant target, int damage, MonsterType type,
+            String hitVerb, String victim, ExplorationResult result) {
+        target.setCurrentHp(target.getCurrentHp() - damage);
+        result.add("The " + type.name().toLowerCase() + " " + hitVerb + " " + victim + " for " + damage + " damage"
+                + (target.isAlive() ? "." : (target instanceof Character ? "." : " — " + target.getName() + " falls!")));
+        if (target instanceof Mule mule && !mule.isAlive()) {
+            save.getMules().remove(mule);
+            recoverMuleCargo(save, mule, result);
+        }
+        return target instanceof Character && save.livingCharacters().isEmpty();
     }
 
     /** A fallen mule's cargo spills where it drops — every living PC in turn scoops up as much as their

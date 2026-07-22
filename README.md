@@ -445,7 +445,22 @@ people you actually want, and rely on the built-in CSRF protection and per-user 
     arriving by stairs runs the same passive trap/secret-door sense and trap-springing that walking in
     through a door already did. All mirror the "best across the party" pattern `/search` already used.
 
-All milestones are complete (434 tests green).
+- **Milestone 26** — monster missile fire: B/X places no monster-specific restriction on missile fire,
+  so a monster that carries a ranged attack now shoots during the approach under the exact range-band
+  to-hit math (`MissileRangeTable`/`RangeBand`, via `AttackResolver`) the party's own missile fire uses,
+  instead of closing defenceless while the party plinks it. `MonsterType` gained an optional
+  `RangedAttack` (a `DamageRoll` + range table; `null` for the melee-only majority, set via a
+  `withRanged` copy method so existing `Bestiary` construction is untouched); `CombatService`'s per-round
+  monster turn now fires a missile volley (`monstersFireMissiles` — front-rank targeting, out-of-range
+  holds fire) while at range and melees in contact, sharing one `applyMonsterDamage` helper across both
+  paths (which also collapses the previously duplicated monster-hit logic). A conservative starter set of
+  the classic B/X humanoid archers is armed in `Bestiary` — Kobold (sling), Goblin/Orc/Hobgoblin (short
+  bow) — leaving natural melee attackers (rats, stirges, undead) unarmed; which monsters carry a bow is a
+  pure content/tuning call. `AutodelveService` inherits this automatically (approach rounds are now
+  slightly deadlier/more realistic). Deliberately deferred: monster tactics (hold-and-shoot vs. advance),
+  firing into melee, cover, and targeting back ranks.
+
+All milestones are complete (440 tests green).
 
 - **House rules from `gygax75-rules`** — a separate house-ruled B/X reference (`DM Justin`'s own rules
   doc) was scanned against delve's implementation and ported in four passes: dungeon procedure gaps
