@@ -42,6 +42,7 @@ public class JdaConfig {
                         CacheFlag.EMOJI,
                         CacheFlag.STICKER,
                         CacheFlag.SCHEDULED_EVENTS,
+                        CacheFlag.SOUNDBOARD_SOUNDS,
                         CacheFlag.ONLINE_STATUS)
                 .setBulkDeleteSplittingEnabled(false)
                 .setEnableShutdownHook(true)
