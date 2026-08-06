@@ -11,72 +11,109 @@ import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.TextBlock;
 import com.anthropic.models.messages.TextBlockParam;
 import com.anthropic.models.messages.ThinkingConfigAdaptive;
+import com.google.genai.Client;
+import com.google.genai.types.Content;
+import com.google.genai.types.GenerateContentResponse;
+import com.google.genai.types.Part;
 import java.util.Base64;
 import java.util.List;
 
 /**
  * Offline converter: sends a B/X module (a FineReader searchable PDF, or a plain-text/Markdown export)
- * to Claude and gets back a {@code module.json} matching delve's authored schema. Runs only as part of
- * the {@code importModule} Gradle task — never in the bot — and reads {@code ANTHROPIC_API_KEY} from
- * the environment via {@link AnthropicOkHttpClient#fromEnv()}.
- *
- * <p>A searchable PDF is sent as a native base64 {@code document} block (Claude reads both the
- * corrected OCR text layer and the page/map images); a text/Markdown export is sent as a text block.
+ * to Gemini (default) or Claude and gets back a {@code module.json} matching delve's authored schema.
+ * Runs only as part of the {@code importModule} Gradle task — never in the bot.
  */
 final class ModuleConverter {
 
-    // Native PDF input limits (Opus 4.8, 1M context): 32 MB request, 600 pages.
+    // Native PDF input limits: 32 MB request, 600 pages.
     static final int MAX_PDF_BYTES = 32 * 1024 * 1024;
     static final int MAX_PDF_PAGES = 600;
 
     private ModuleConverter() {}
 
     /** Converts a PDF byte array to a module JSON string. */
-    static String convertPdf(byte[] pdf, String model, long maxTokens) {
+    static String convertPdf(String provider, byte[] pdf, String model, long maxTokens) {
+        if ("claude".equalsIgnoreCase(provider)) {
+            return convertPdfClaude(pdf, model, maxTokens);
+        }
+        return convertPdfGemini(pdf, model);
+    }
+
+    /** Converts a plain-text/Markdown export to a module JSON string. */
+    static String convertText(String provider, String moduleText, String model, long maxTokens) {
+        if ("claude".equalsIgnoreCase(provider)) {
+            return convertTextClaude(moduleText, model, maxTokens);
+        }
+        return convertTextGemini(moduleText, model);
+    }
+
+    // --- GEMINI IMPL ---
+
+    private static String convertPdfGemini(byte[] pdf, String model) {
+        String modelName = (model == null || model.isBlank() || model.equals("claude-opus-4-8")) ? "gemini-2.5-flash" : model;
+        Client client = Client.builder().build();
+        Part pdfPart = Part.fromBytes(pdf, "application/pdf");
+        Part promptPart = Part.fromText(PROMPT);
+        Content content = Content.builder().parts(List.of(pdfPart, promptPart)).build();
+        GenerateContentResponse response = client.models.generateContent(modelName, content, null);
+        return extractJson(response.text());
+    }
+
+    private static String convertTextGemini(String moduleText, String model) {
+        String modelName = (model == null || model.isBlank() || model.equals("claude-opus-4-8")) ? "gemini-2.5-flash" : model;
+        Client client = Client.builder().build();
+        String fullPrompt = PROMPT + "\n\n--- MODULE TEXT BELOW ---\n\n" + moduleText;
+        GenerateContentResponse response = client.models.generateContent(modelName, fullPrompt, null);
+        return extractJson(response.text());
+    }
+
+    // --- CLAUDE IMPL ---
+
+    private static String convertPdfClaude(byte[] pdf, String model, long maxTokens) {
         String base64 = Base64.getEncoder().encodeToString(pdf);
         DocumentBlockParam doc = DocumentBlockParam.builder()
                 .source(Base64PdfSource.builder().data(base64).build())
                 .build();
-        MessageCreateParams params = baseBuilder(model, maxTokens)
+        MessageCreateParams params = baseBuilderClaude(model, maxTokens)
                 .addUserMessageOfBlockParams(List.of(
                         ContentBlockParam.ofDocument(doc),
                         ContentBlockParam.ofText(TextBlockParam.builder().text(PROMPT).build())))
                 .build();
-        return extractJson(call(params));
-    }
-
-    /** Converts a plain-text/Markdown export to a module JSON string. */
-    static String convertText(String moduleText, String model, long maxTokens) {
-        MessageCreateParams params = baseBuilder(model, maxTokens)
-                .addUserMessage(PROMPT + "\n\n--- MODULE TEXT BELOW ---\n\n" + moduleText)
-                .build();
-        return extractJson(call(params));
-    }
-
-    private static MessageCreateParams.Builder baseBuilder(String model, long maxTokens) {
-        return MessageCreateParams.builder()
-                .model(model == null || model.isBlank() ? "claude-opus-4-8" : model)
-                .maxTokens(maxTokens)
-                // Adaptive thinking helps with the careful cross-referencing of exits and stat blocks.
-                .thinking(ThinkingConfigAdaptive.builder().build());
-    }
-
-    private static Message call(MessageCreateParams params) {
         AnthropicClient client = AnthropicOkHttpClient.fromEnv();
-        return client.messages().create(params);
-    }
-
-    /** Concatenates the response's text blocks and trims to the outermost JSON object. */
-    private static String extractJson(Message response) {
+        Message response = client.messages().create(params);
         StringBuilder sb = new StringBuilder();
         for (ContentBlock block : response.content()) {
             block.text().map(TextBlock::text).ifPresent(sb::append);
         }
-        String text = sb.toString();
+        return extractJson(sb.toString());
+    }
+
+    private static String convertTextClaude(String moduleText, String model, long maxTokens) {
+        MessageCreateParams params = baseBuilderClaude(model, maxTokens)
+                .addUserMessage(PROMPT + "\n\n--- MODULE TEXT BELOW ---\n\n" + moduleText)
+                .build();
+        AnthropicClient client = AnthropicOkHttpClient.fromEnv();
+        Message response = client.messages().create(params);
+        StringBuilder sb = new StringBuilder();
+        for (ContentBlock block : response.content()) {
+            block.text().map(TextBlock::text).ifPresent(sb::append);
+        }
+        return extractJson(sb.toString());
+    }
+
+    private static MessageCreateParams.Builder baseBuilderClaude(String model, long maxTokens) {
+        return MessageCreateParams.builder()
+                .model(model == null || model.isBlank() ? "claude-opus-4-8" : model)
+                .maxTokens(maxTokens)
+                .thinking(ThinkingConfigAdaptive.builder().build());
+    }
+
+    /** Trims raw model response text to the outermost JSON object. */
+    private static String extractJson(String text) {
         int start = text.indexOf('{');
         int end = text.lastIndexOf('}');
         if (start < 0 || end <= start) {
-            throw new IllegalStateException("Claude did not return a JSON object. Raw response:\n" + text);
+            throw new IllegalStateException("Model did not return a JSON object. Raw response:\n" + text);
         }
         return text.substring(start, end + 1);
     }

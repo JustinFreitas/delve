@@ -2,7 +2,6 @@ package dev.freitas.delve.importer;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import dev.freitas.delve.game.dungeon.ModuleSchema;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,11 +16,13 @@ import org.apache.pdfbox.pdmodel.PDDocument;
  *
  * <pre>
  *   ./gradlew importModule --args="--pdf=B2.pdf --name=keep"
- *   ./gradlew importModule --args="--text=B2.md --name=keep --model=claude-opus-4-8"
+ *   ./gradlew importModule --args="--pdf=B2.pdf --name=keep --provider=gemini --model=gemini-2.5-flash"
+ *   ./gradlew importModule --args="--text=B2.md --name=keep --provider=claude --model=claude-opus-4-8"
  * </pre>
  *
- * Requires {@code ANTHROPIC_API_KEY}. Writes {@code src/main/resources/content/modules/<name>.json};
- * the result is meant to be reviewed and hand-corrected before play.
+ * Requires {@code GEMINI_API_KEY} (for Gemini, default) or {@code ANTHROPIC_API_KEY} (for Claude).
+ * Writes {@code src/main/resources/content/modules/<name>.json}; the result is meant to be reviewed
+ * and hand-corrected before play.
  */
 public final class ImporterMain {
 
@@ -32,19 +33,29 @@ public final class ImporterMain {
         String pdfPath = opts.get("pdf");
         String textPath = opts.get("text");
         String name = opts.get("name");
-        String model = opts.getOrDefault("model", "claude-opus-4-8");
+        String provider = opts.getOrDefault("provider", "gemini").toLowerCase(Locale.ROOT);
+        String model = opts.get("model");
         long maxTokens = Long.parseLong(opts.getOrDefault("maxTokens", "32000"));
 
         if (name == null || name.isBlank() || (pdfPath == null && textPath == null)) {
             System.err.println("Usage: importModule --pdf=<file.pdf>|--text=<file.txt|.md> --name=<module-name>"
-                    + " [--model=claude-opus-4-8] [--maxTokens=32000]");
+                    + " [--provider=gemini|claude] [--model=<model-name>] [--maxTokens=32000]");
             System.exit(2);
             return;
         }
-        if (System.getenv("ANTHROPIC_API_KEY") == null || System.getenv("ANTHROPIC_API_KEY").isBlank()) {
-            System.err.println("ANTHROPIC_API_KEY is not set. Export it before running the importer.");
-            System.exit(2);
-            return;
+
+        if ("claude".equalsIgnoreCase(provider)) {
+            if (System.getenv("ANTHROPIC_API_KEY") == null || System.getenv("ANTHROPIC_API_KEY").isBlank()) {
+                System.err.println("ANTHROPIC_API_KEY is not set. Export it before running the importer with --provider=claude.");
+                System.exit(2);
+                return;
+            }
+        } else {
+            if (System.getenv("GEMINI_API_KEY") == null || System.getenv("GEMINI_API_KEY").isBlank()) {
+                System.err.println("GEMINI_API_KEY is not set. Export it before running the importer with --provider=gemini.");
+                System.exit(2);
+                return;
+            }
         }
 
         String safeName = name.trim().replaceAll("[^A-Za-z0-9_-]", "");
@@ -52,16 +63,20 @@ public final class ImporterMain {
                 ? Path.of(opts.get("out"))
                 : Path.of("src", "main", "resources", "content", "modules", safeName + ".json");
 
+        String selectedModel = model != null ? model : ("claude".equalsIgnoreCase(provider) ? "claude-opus-4-8" : "gemini-2.5-flash");
+
         String json;
         if (pdfPath != null) {
             byte[] pdf = Files.readAllBytes(Path.of(pdfPath));
             guardPdf(pdf);
-            System.out.println("Converting PDF " + pdfPath + " (" + (pdf.length / 1024) + " KB) with " + model + "...");
-            json = ModuleConverter.convertPdf(pdf, model, maxTokens);
+            System.out.println("Converting PDF " + pdfPath + " (" + (pdf.length / 1024) + " KB) using "
+                    + provider.toUpperCase(Locale.ROOT) + " (" + selectedModel + ")...");
+            json = ModuleConverter.convertPdf(provider, pdf, selectedModel, maxTokens);
         } else {
             String text = Files.readString(Path.of(textPath));
-            System.out.println("Converting text " + textPath + " (" + text.length() + " chars) with " + model + "...");
-            json = ModuleConverter.convertText(text, model, maxTokens);
+            System.out.println("Converting text " + textPath + " (" + text.length() + " chars) using "
+                    + provider.toUpperCase(Locale.ROOT) + " (" + selectedModel + ")...");
+            json = ModuleConverter.convertText(provider, text, selectedModel, maxTokens);
         }
 
         // Validate + pretty-print so the output is reviewable, and fail loudly on a malformed extraction.

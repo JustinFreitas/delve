@@ -7,9 +7,9 @@ plugins {
     // https://plugins.gradle.org/plugin/io.spring.dependency-management
     id("io.spring.dependency-management") version "1.1.7"
     // https://plugins.gradle.org/plugin/org.flywaydb.flyway
-    id("org.flywaydb.flyway") version "12.9.0"
+    id("org.flywaydb.flyway") version "13.1.0"
     // https://plugins.gradle.org/plugin/com.github.ben-manes.versions
-    id("com.github.ben-manes.versions") version "0.54.0"
+    id("com.github.ben-manes.versions") version "0.59.0"
 }
 
 // Version Constants
@@ -61,14 +61,14 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-oauth2-client:$springBootVersion")
 
     // https://github.com/discord-jda/JDA  — Discord gateway + slash commands (no audio module used).
-    implementation("net.dv8tion:JDA:6.4.2") {
+    implementation("net.dv8tion:JDA:6.5.0") {
         exclude(module = "opus-java")
     }
 
     // https://mvnrepository.com/artifact/com.h2database/h2
     runtimeOnly("com.h2database:h2:2.4.240")
     // https://mvnrepository.com/artifact/org.flywaydb/flyway-core
-    implementation("org.flywaydb:flyway-core:12.9.0")
+    implementation("org.flywaydb:flyway-core:13.1.0")
     // Spring Boot 4 split autoconfigurations into per-feature modules; Flyway's lives here. Without
     // it, migrations silently never run and the schema is never created.
     implementation("org.springframework.boot:spring-boot-flyway:$springBootVersion")
@@ -77,21 +77,23 @@ dependencies {
 
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind
     // Used to (de)serialize game state to JSON blobs and to load authored content files.
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.1")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test:$springBootVersion") {
         exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
     }
     // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter
-    testImplementation("org.junit.jupiter:junit-jupiter:5.14.3")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.2")
     // Spring Security test support — oauth2Login() request post-processor for MockMvc web tests.
     testImplementation("org.springframework.security:spring-security-test")
 
     // Offline importer only (kept off the bot classpath):
     // https://github.com/anthropics/anthropic-sdk-java — PDF -> module.json conversion via Claude.
-    importerImplementation("com.anthropic:anthropic-java:2.34.0")
+    importerImplementation("com.anthropic:anthropic-java:2.52.0")
+    // https://github.com/googleapis/google-genai-java — PDF -> module.json conversion via Gemini.
+    importerImplementation("com.google.genai:google-genai:1.64.0")
     // https://mvnrepository.com/artifact/org.apache.pdfbox/pdfbox — page count / size guard for big PDFs.
-    importerImplementation("org.apache.pdfbox:pdfbox:3.0.5")
+    importerImplementation("org.apache.pdfbox:pdfbox:3.0.8")
 }
 
 // One-time, offline PDF -> content/modules/<name>.json conversion. Needs ANTHROPIC_API_KEY.
