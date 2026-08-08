@@ -1,0 +1,6 @@
+{
+  "name": "delve",
+  "version": "0.1.0",
+  "private": true,
+  "description": "B/X D&D text-based dungeon crawl Discord bot (Java/Kotlin, Spring Boot). package.json exists so PM2 displays the version in `pm2 list`. Keep version in sync with build.gradle.kts."
+}
