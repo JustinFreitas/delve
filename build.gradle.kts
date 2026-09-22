@@ -22,7 +22,7 @@ java {
 }
 
 group = "dev.freitas"
-version = "0.1.0"
+version = "0.1.1"
 
 // Offline module-importer source set. Its Anthropic-SDK + PDFBox dependencies live ONLY here, so the
 // bot's main/bootJar classpath stays API-key-free. Run via the `importModule` task below.
@@ -61,7 +61,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-oauth2-client:$springBootVersion")
 
     // https://github.com/discord-jda/JDA  — Discord gateway + slash commands (no audio module used).
-    implementation("net.dv8tion:JDA:6.5.0") {
+    implementation("net.dv8tion:JDA:6.7.0") {
         exclude(module = "opus-java")
     }
 

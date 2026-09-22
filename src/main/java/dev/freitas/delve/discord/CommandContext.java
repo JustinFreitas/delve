@@ -6,7 +6,7 @@ import dev.freitas.delve.data.PlayerSaveService;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import org.springframework.stereotype.Component;
 
@@ -45,7 +45,7 @@ public abstract class CommandContext {
 
     private final Beans beans;
     private final Guild guild;
-    private final TextChannel channel;
+    private final GuildMessageChannel channel;
     private final Member invoker;
     private final Command command;
     private final String prefix;
@@ -54,7 +54,7 @@ public abstract class CommandContext {
     protected CommandContext(
             Beans beans,
             Guild guild,
-            TextChannel channel,
+            GuildMessageChannel channel,
             Member invoker,
             Command command,
             String prefix,
@@ -76,7 +76,7 @@ public abstract class CommandContext {
         return guild;
     }
 
-    public TextChannel getChannel() {
+    public GuildMessageChannel getChannel() {
         return channel;
     }
 

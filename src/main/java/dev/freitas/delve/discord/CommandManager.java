@@ -10,8 +10,7 @@ import java.util.regex.Pattern;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
-import net.dv8tion.jda.api.entities.channel.ChannelType;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +57,7 @@ public class CommandManager {
     }
 
     /** Dispatch a legacy prefix/mention message command. */
-    public void onMessage(Guild guild, TextChannel channel, Member member, Message message) {
+    public void onMessage(Guild guild, GuildMessageChannel channel, Member member, Message message) {
         String prefix = botProps.getPrefix();
         String raw = message.getContentRaw();
 
@@ -109,12 +108,19 @@ public class CommandManager {
             return;
         }
 
-        if (event.getChannelType() != ChannelType.TEXT) {
-            event.getHook().sendMessage("This command can only be used in a text channel.").queue();
+        if (!event.isFromGuild()) {
+            event.getHook().sendMessage("This command can only be used in a server.").queue();
             return;
         }
 
-        TextChannel channel = event.getChannel().asTextChannel();
+        GuildMessageChannel channel;
+        try {
+            channel = event.getChannel().asGuildMessageChannel();
+        } catch (IllegalStateException e) {
+            event.getHook().sendMessage("This command can only be used in a guild message channel.").queue();
+            return;
+        }
+
         CommandContext ctx =
                 new SlashCommandContext(
                         contextBeans, guild, channel, member, event, command, "/", "/" + event.getName());

@@ -4,7 +4,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 
@@ -17,7 +17,7 @@ public class MessageCommandContext extends CommandContext {
     public MessageCommandContext(
             Beans beans,
             Guild guild,
-            TextChannel channel,
+            GuildMessageChannel channel,
             Member invoker,
             Message message,
             Command command,

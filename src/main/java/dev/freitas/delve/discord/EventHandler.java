@@ -1,7 +1,6 @@
 package dev.freitas.delve.discord;
 
 import java.util.List;
-import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
@@ -40,11 +39,11 @@ public class EventHandler extends ListenerAdapter {
         if (event.isWebhookMessage() || event.getAuthor().isBot()) {
             return;
         }
-        if (event.getChannelType() != ChannelType.TEXT) {
+        if (!event.isFromGuild()) {
             return;
         }
         commandManager.onMessage(
-                event.getGuild(), event.getChannel().asTextChannel(), event.getMember(), event.getMessage());
+                event.getGuild(), event.getChannel().asGuildMessageChannel(), event.getMember(), event.getMessage());
     }
 
     @Override
